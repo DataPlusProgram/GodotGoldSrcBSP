@@ -1,0 +1,38 @@
+[gd_scene load_steps=6 format=2]
+
+[ext_resource path="res://addons/gldsrcBSP/src/BSP_Map.gd" type="Script" id=1]
+[ext_resource path="res://addons/gldsrcBSP/src/entityDataParser.gd" type="Script" id=2]
+[ext_resource path="res://addons/gldsrcBSP/src/levelBuilder.gd" type="Script" id=3]
+[ext_resource path="res://addons/gldsrcBSP/src/wavLoad.gd" type="Script" id=4]
+[ext_resource path="res://addons/gldsrcBSP/src/imageBuilder.gd" type="Script" id=5]
+
+[node name="BSP_Map" type="Spatial"]
+script = ExtResource( 1 )
+__meta__ = {
+"done": true
+}
+textureFiltering = true
+
+[node name="levelBuilder" type="Spatial" parent="."]
+script = ExtResource( 3 )
+__meta__ = {
+"hidden": true
+}
+
+[node name="entityDataParser" type="Node" parent="."]
+script = ExtResource( 2 )
+__meta__ = {
+"hidden": true
+}
+
+[node name="waveLoader" type="Node" parent="."]
+script = ExtResource( 4 )
+__meta__ = {
+"hidden": true
+}
+
+[node name="ImageBuilder" type="Node" parent="."]
+script = ExtResource( 5 )
+__meta__ = {
+"hidden": true
+}
