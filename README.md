@@ -16,11 +16,11 @@ Enter thet path to the bsp in "Path" field and Press "Create Map"
   
 If you want the map to generate on runtime don't press "Create Map" and it will automatically be created on launch.  
     
-##Entities
+## Entities
   
 This plugin supports various but not all entities.  
 If you want a body to trigger/interact with the entities add it to the "hlTrigger" group.  
 
 ## Media 
 
-![](bsp.png)
+![](bsp.png)  
