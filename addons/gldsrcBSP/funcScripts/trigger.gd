@@ -8,7 +8,7 @@ func _ready():
 	if has_meta("trigger_once"):
 		oneshot = true
 		
-	print(targetName)
+	
 	
 
 

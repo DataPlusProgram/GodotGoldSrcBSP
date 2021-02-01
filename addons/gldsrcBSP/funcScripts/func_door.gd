@@ -61,7 +61,7 @@ func _ready():
 			dir.y = -dir.z
 			dir.z = 0
 	
-		LineDraw.drawLine(Vector3.ZERO,dir)
+		#LineDraw.drawLine(Vector3.ZERO,dir)
 	
 		if abs(dir.x) > 0.01: 
 			destScaler.x = 1
