@@ -1,0 +1,48 @@
+[gd_scene load_steps=2 format=2]
+
+[ext_resource path="res://addons/gldsrcBSP/player/debug/debug.gd" type="Script" id=1]
+
+[node name="CanvasLayer" type="CanvasLayer"]
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+margin_right = 40.0
+margin_bottom = 40.0
+script = ExtResource( 1 )
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="fps" type="Label" parent="VBoxContainer"]
+margin_right = 63.0
+margin_bottom = 14.0
+text = "fps"
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="drawCalls" type="Label" parent="VBoxContainer"]
+margin_top = 18.0
+margin_right = 63.0
+margin_bottom = 32.0
+text = "draw calls"
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="vertices" type="Label" parent="VBoxContainer"]
+margin_top = 36.0
+margin_right = 63.0
+margin_bottom = 50.0
+text = "vertices"
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="material" type="Label" parent="VBoxContainer"]
+margin_top = 54.0
+margin_right = 63.0
+margin_bottom = 68.0
+text = "material"
+__meta__ = {
+"_edit_use_anchors_": false
+}

@@ -5,7 +5,7 @@
 [ext_resource path="res://addons/gldsrcBSP/src/levelBuilder.gd" type="Script" id=3]
 [ext_resource path="res://addons/gldsrcBSP/src/wavLoad.gd" type="Script" id=4]
 [ext_resource path="res://addons/gldsrcBSP/src/imageBuilder.gd" type="Script" id=5]
-[ext_resource path="res://bmpLoader.gd" type="Script" id=6]
+[ext_resource path="res://addons/gldsrcBSP/src/bmpLoader.gd" type="Script" id=6]
 [ext_resource path="res://addons/gldsrcBSP/src/mdlLoad.gd" type="Script" id=7]
 
 [node name="BSP_Map" type="Spatial"]
