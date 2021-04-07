@@ -6,6 +6,32 @@ var scaleFactor = 0.05
 var cornerPaths = {}
 var trackPaths = {}
 
+const MATERIAL = {
+	0: ["glass","bustglass1"],
+	1: ["wood","wood1"],
+	2: "metal",
+	3: "flesh",
+	4: "cinder block",
+	5: "ceiling tile",
+	6: "computer",
+	7: "unbreakable glass",
+	8: "rock"
+}
+
+const CDAUDIO = {
+	2: "Half-Life01.mp3",
+	3: "Prospero01.mp3",
+	4: "Half-Life12.mp3",
+	5: "Half-Life07.mp3",
+	6: "Half-Life10.mp3",
+	7: "Suspense01.mp3",
+	8: "Suspense03.mp3",
+	9: "Half-Life09.mp3",
+	10:"Half-Life02.mp3",
+	11:"Half-Life13.mp3",
+	12:"Half-Life04.mp3",
+}
+
 const DOORSOUNDS = {
 	1: "doormove1.wav",
 	2: "doormove2.wav",
@@ -43,6 +69,15 @@ const BUTTONSOUNDS = {
 	14:"lightswitch2.wav"
 }
 
+const TRAINSOUNDS = {
+	1 : "plats/ttrain1.wav",
+	2 : "plats/ttrain2.wav",
+	3 : "plats/ttrain3.wav",
+	4 : "plats/ttrain4.wav",
+	5 : "plats/ttrain5.wav",
+	6 : "plats/ttrain6.wav",
+	7 : "plats/ttrain7.wav"
+}
 
 enum RENDERMODE {
 	color = 1
@@ -60,7 +95,7 @@ func _ready():
 func parseEntityData(entityDict,wadDict):
 	
 	if entityDict.has("WAD"):
-		allWADparse(entityDict["WAD"],wadDict)
+		allWADparse(entityDict,wadDict)
 		
 	elif entityDict.has("CLASSNAME"):
 		var className = entityDict["CLASSNAME"]
@@ -81,17 +116,20 @@ func parseEntityData(entityDict,wadDict):
 				get_parent().playerSpawn = info
 		
 		
-		
-		elif className == "LIGHT":
-			if get_parent().lights:
+		if get_parent().lights:
+			if className == "LIGHT":
 				parseLight(entityDict)
+			elif className == "LIGHT_SPOT":
+				parseLightSpot(entityDict)
 		
-		elif className == "FUNC_DOOR":
+		
+		
+		if className == "FUNC_DOOR":
 			get_parent().postFuncBrushes.append(entityDict)
-		
 		elif className == "FUNC_BUTTON":
 			get_parent().postFuncBrushes.append(entityDict)
-			
+		elif className == "FUNC_ROT_BUTTON":
+			get_parent().postFuncBrushes.append(entityDict)
 		elif className == "FUNC_WALL":
 			get_parent().postFuncBrushes.append(entityDict)
 		
@@ -110,6 +148,8 @@ func parseEntityData(entityDict,wadDict):
 		elif className == "TRIGGER_TRANSITION":
 			get_parent().postFuncBrushes.append(entityDict)
 		elif className == "TRIGGER_AUTOSAVE":
+			get_parent().postFuncBrushes.append(entityDict)
+		elif className == "TRIGGER_PUSH":
 			get_parent().postFuncBrushes.append(entityDict)
 		elif className == "FUNC_BREAKABLE":
 			get_parent().postFuncBrushes.append(entityDict)
@@ -139,13 +179,27 @@ func parseEntityData(entityDict,wadDict):
 		elif className == "AMBIENT_GENERIC":
 			parseAmbientGeneric(entityDict)
 		elif className == "FUNC_LADDER":
-			parseTriggerTransition(entityDict)
+			parseLadder(entityDict)
+		elif className == "TRIGGER_CDAUDIO":
+			get_parent().postFuncBrushes.append(entityDict)
+		elif className == "FUNC_PENDULUM":
+			get_parent().postFuncBrushes.append(entityDict)
+		elif className == "ITEM_SUIT":
+			parseModel(entityDict,"w_suit.mdl")
+		elif className == "AMMO_357":
+			parseModel(entityDict,"w_357ammobox.mdl")
+		
+			
+		
+
+		
 		
 		
 
 
-func allWADparse(data,wadDict):
-	data+=("DECALS.WAD")
+func allWADparse(entityDict,wadDict):
+	var data = entityDict["WAD"]
+	#data+=("DECALS.WAD")
 	data = data.replace("\\QUIVER\\VALVE\\","")
 	var baseDir = wadDict["baseDirectory"]
 	var wadList = data.split(";",false)
@@ -155,14 +209,27 @@ func allWADparse(data,wadDict):
 		var parsedWad = WADparse(baseDir + i.to_lower())
 		if parsedWad != null:
 			wadDict[i] = parsedWad
+			
+	if entityDict.has("SKYNAME"):
+		get_parent().skyTexture = wadDict["baseDirectory"]+ "gfx/env/" +entityDict["SKYNAME"].to_lower()
 
 
 func WADparse(path):
 	var file = load("res://addons/gldsrcBSP/DFile.gd").new()
 	
+	
 	if file.loadFile(path) == false:
-		print("wad not found:",path)
-		return null
+		var split = path.split("/")
+		if split[split.size()-1] == "halflife.wad":#we are looking for halflife.wad
+			var guessPath = guessWadPath(path)
+			if file.loadFile(guessPath) == false:
+				print("halflife.wad not found")
+				return null
+		else:
+			print("wad not found:",path)
+			return null
+			
+	
 	var imageDict = {}
 	var magic = file.get_String(4)
 	var numDirectories = file.get_32()
@@ -255,13 +322,54 @@ func parseLight(dict):
 	light.translation = pos
 	light.omni_range = scaleFactor * get_parent().lightRangeMultiplier
 	light.light_indirect_energy = 100*scaleFactor * get_parent().lightEnergyMultiplier
-	
+#	light.light_energy = 5
 	var scriptRes = load("res://addons/gldsrcBSP/funcScripts/light.gd")
 	light.set_script(scriptRes)
 	get_parent().lightNodes.add_child(light)
 	
 	
+func parseLightSpot(dict):
+	var pos = textToVector3(dict["ORIGIN"])
+	var text = dict["_LIGHT"]
+	var axis = text.split(" ")
+	var r = 1
+	var g = 1
+	var b = 1
+	var a = 1
 
+	
+	if axis.size() > 1:
+		r = int(axis[0])/255.0
+		g = int(axis[1])/255.0
+		b = int(axis[2])/255.0
+		a = 1
+	if axis.size() >3:
+		a = int(axis[3])/255.0
+	
+		
+	var brush
+	var light = SpotLight.new()
+	
+	if dict.has("SPAWNFLAGS"):
+		light.visible = false
+	
+	if dict.has("TARGETNAME"):
+		light.add_to_group(dict["TARGETNAME"])
+	var pitch = 0 
+	if dict.has("PITCH"):
+		int(dict["PITCH"])
+		pitch = (pitch + 90)
+	
+	light.light_color = Color(r,g,b)
+	light.translation = pos
+	light.rotation_degrees.y = pitch
+	light.spot_range = 20.0
+	#light.omni_range = scaleFactor * get_parent().lightRangeMultiplier
+	#light.light_indirect_energy = 100*scaleFactor * get_parent().lightEnergyMultiplier
+	
+	var scriptRes = load("res://addons/gldsrcBSP/funcScripts/light.gd")
+	light.set_script(scriptRes)
+	get_parent().lightNodes.add_child(light)
 	
 func textToVector3(text):
 	var axis = text.split(" ")
@@ -358,7 +466,7 @@ func parseDoor(dict):
 	
 	doorComponent.set_meta("targetNodePaths",targetNodeArr)
 	doorComponent.set_meta("scaleFactor",scaleFactor)
-	
+	doorComponent.name = "func_door"
 	
 	if dict.has("TARGETNAME"):
 		doorComponent.add_to_group(dict["TARGETNAME"])
@@ -391,6 +499,8 @@ func parseDoor(dict):
 		
 		doorComponent.set_meta("angle",angle)
 		
+	if dict.has("TARGETNAME"):
+		doorComponent.name = dict["TARGETNAME"]
 	
 	if moveSound != 0:
 		var audioPlayer = get_parent().createAudioPlayer3DfromName("doors/"+ DOORSOUNDS[moveSound])
@@ -412,20 +522,38 @@ func parseDoor(dict):
 func parseBreakable(dict):
 	
 	var faceMeshNodes = get_parent().faceMeshNodes
-	var bushModelInfo = getModelInfoFromDict(dict)
-	var targetFaces = bushModelInfo["faceArr"]
+	var brushModelInfo = getModelInfoFromDict(dict)
+	var targetFaces = brushModelInfo["faceArr"]
 	var targetNodeArr = []
-	
+	var materialType = 0
+	if dict.has("MATERIAL"):
+		materialType = int(dict["MATERIAL"])
+	#var material = MATERIAL[int(dict["MATERIAL"])]
 	
 	for i in targetFaces:
-		if i > faceMeshNodes.size():
+		#if i > faceMeshNodes.size():
+		#	continue
+		if !faceMeshNodes.has(i):
+			return
+		if faceMeshNodes[i] == null:
 			continue
 		targetNodeArr.append(faceMeshNodes[i].get_parent().name)
-	
+		
 		var scriptRes = load("res://addons/gldsrcBSP/funcScripts/func_breakable.gd")
 		var breakableNode = Node.new()
 		breakableNode.name = "func_breakable"
+		
+		if dict.has("TARGETNAME"):
+			breakableNode.add_to_group(dict["TARGETNAME"])
+			
+		if dict.has("TARGET"):
+			breakableNode.set_meta("targetName",dict["TARGET"])
+		breakableNode.set_meta("targetNodes",targetNodeArr[0])
+		breakableNode.set_meta("materialType",materialType)
 		breakableNode.set_script(scriptRes)
+		
+		
+		
 		get_parent().get_node("BrushEntities").add_child(breakableNode)
 		
 	#breakpoint
@@ -463,6 +591,58 @@ func parseButton(dict):
 	interactionAreaNode.set_script(scriptRes)
 	get_parent().get_node("BrushEntities").add_child(interactionAreaNode)
 
+func parseRotButton(dict):
+	
+	var target = null
+	var bushModelInfo = getModelInfoFromDict(dict)
+	var targetFaces = bushModelInfo["faceArr"]
+	var faceMeshNodes = get_parent().faceMeshNodes
+	var targetNodeArr = []
+	var axis = Vector3(0,1,0)
+	if dict.has("TARGET"):
+		target = dict["TARGET"]
+	
+	var origin = Vector2.ZERO
+	var sound = 0
+	
+	if dict.has("ORIGIN"):
+		origin = textToVector3(dict["ORIGIN"])
+
+	var flags = int(dict["SPAWNFLAGS"])
+	if(flags & 64) >0:#x axis
+		axis = Vector3(-1,0,0)
+	
+	if(flags & 128) >0:#y axis
+		axis = Vector3(0,0,1)
+		
+		
+	
+	
+	for i in targetFaces:
+		if faceMeshNodes.has(i):
+			setOrigin(faceMeshNodes[i].get_parent(),origin)
+			targetNodeArr.append(faceMeshNodes[i].get_parent().name)
+			
+	var scriptRes = load("res://addons/gldsrcBSP/funcScripts/func_rot_button.gd")
+	
+	
+	var interactionAreaNode = createInteractionAreaNode(bushModelInfo,3)
+	
+	if dict.has("SOUNDS"):
+		if dict["SOUNDS"] != "0":
+			sound = int(dict["SOUNDS"])
+			if BUTTONSOUNDS.has(sound):
+				var audioPlayer = get_parent().createAudioPlayer3DfromName("buttons/"+ BUTTONSOUNDS[sound])
+				audioPlayer.name = "sound"
+				interactionAreaNode.add_child(audioPlayer)
+	
+	interactionAreaNode.set_meta("targetNodePaths",targetNodeArr)
+	interactionAreaNode.translation =(bushModelInfo["BBMin"] + 0.5*(bushModelInfo["BBMax"]-bushModelInfo["BBMin"]))+origin
+	interactionAreaNode.name = "func_rot_button"
+	interactionAreaNode.set_meta("target",target)
+	interactionAreaNode.set_meta("axis",axis)
+	interactionAreaNode.set_script(scriptRes)
+	get_parent().get_node("BrushEntities").add_child(interactionAreaNode)
 
 
 func parsePushable(dict):
@@ -471,13 +651,18 @@ func parsePushable(dict):
 	var bushModelInfo = getModelInfoFromDict(dict)
 	var targetFaces = bushModelInfo["faceArr"] 
 	var rigidBody = RigidBody.new()
-	
+	var originPos = faceMeshNodes[targetFaces[0]].get_parent().translation
+
+	rigidBody.translation = originPos
+	rigidBody.can_sleep = false
+	#rigid body (center translation)
+	#
 	for i in targetFaces: #for every static body of model
 		if faceMeshNodes.has(i):
 			
 			var meshNode : MeshInstance = faceMeshNodes[i]
 			var bodyNode = meshNode.get_parent()
-			
+			var parPos = meshNode.get_parent().translation
 			#bodyNode.remove_child(meshNode)#we remove mesh from StaticBody
 			var pos = bodyNode.translation
 			for c in bodyNode.get_children():
@@ -485,10 +670,16 @@ func parsePushable(dict):
 				if c.get_class() != "MeshInstance":
 					queue_free()
 			bodyNode.queue_free()
+			
+			
 			rigidBody.add_child(meshNode)#we add mesh to rigidBody
 			meshNode.create_convex_collision()
 			
 			var collisionShape = meshNode.get_child(0).get_child(0)
+			
+			meshNode.translation = parPos - originPos
+			collisionShape.translation = parPos - originPos
+			
 			collisionShape.get_parent().remove_child(collisionShape)
 			rigidBody.add_child(collisionShape)
 			
@@ -497,27 +688,11 @@ func parsePushable(dict):
 				rigidBody.axis_lock_angular_y = true
 				rigidBody.axis_lock_angular_z = true
 			
-			rigidBody.translation = pos
-			rigidBody.gravity_scale = 10
-			get_parent().add_child(rigidBody)
-			#print(staticBody.name)
-			#for c in staticBody.get_children():
-			#	continue
-				#print(c.name)
-			#if(c.get_class() == "CollisionShape"):
-			#	c.queue_free()
-			#else:
-				#c.get_parent().remove_child(c)
-				#rigidBody.add_child(c)
-		
-		
-			#pstaticBody.get_parent().remove_child(staticBody)
-		
-	#var collisionNode = CollisionShape.new()
-	#var collisionShape = BoxShape.new()
-	#collisionShape.extents = bushModelInfo["BBabs"]
-	#collisionNode.shape = collisionShape
-#	rigidBody.mode = RigidBody.MODE_KINEMATIC
+			#rigidBody.translation = pos
+	rigidBody.gravity_scale = 10
+	get_parent().add_child(rigidBody)
+
+
 	rigidBody.translation.y += scaleFactor
 	rigidBody.name = "func_pushable"
 	#get_parent().add_child(rigidBody)
@@ -539,19 +714,7 @@ func parseDoorRotating(dict):
 	if dict.has("MOVESND"):
 		moveSound = int(dict["MOVESND"])
 	
-	if dict.has("SPAWNFLAGS"):
-		var flags = int(dict["SPAWNFLAGS"])
-		if (flags & (1 << 6)) > 0 or (flags & (1 << 7)) > 0:
-			axis = Vector3.ZERO
-		
-		if(flags & (1 << 6 )) > 0:
-			initialRot = Vector3(90,0,0)
-			axis += Vector3(1,0,0)
-		
-		if(flags & (1 << 7)) > 0:
-			initialRot = Vector3(0,0,90)
-			axis += Vector3(0,0,-1)
-		
+
 		
 		if !dict.has("ORIGIN"):
 			#print("func_door_rotating has no origin skipping...")
@@ -573,8 +736,9 @@ func parseDoorRotating(dict):
 	
 	
 	if moveSound != 0:
-		var audioPlayer = get_parent().createAudioPlayer3DfromName("doors/" + DOORSOUNDS[moveSound])
+		var audioPlayer : AudioStreamPlayer3D = get_parent().createAudioPlayer3DfromName("doors/" + DOORSOUNDS[moveSound])
 		audioPlayer.name = "moveSound"
+		audioPlayer.unit_db = 10
 		doorComponent.add_child(audioPlayer)
 	
 	doorComponent.set_meta("targetNodePaths",targetNodeArr)
@@ -582,7 +746,51 @@ func parseDoorRotating(dict):
 	doorComponent.set_meta("origin",origin)
 	doorComponent.set_meta("rotAmount",rotAmount)
 	doorComponent.set_meta("initialRot",initialRot)
+	
+	doorComponent.set_meta("rotDir",1)
+	doorComponent.name = "func_door_rotating"
+	if dict.has("SPAWNFLAGS"):
+		var flags = int(dict["SPAWNFLAGS"])
+		
+		if (flags & (1 << 0)) > 0: 
+			print("startsOpen")
+			
+		if (flags & (1 << 1)) > 0:
+			doorComponent.set_meta("rotDir",-1) 
+			#print("reverseDir")
+		
+		if (flags & (1 << 2)) > 0:
+			pass
+			#print("dont link")
+		
+		if (flags & (1 << 3)) > 0:
+			pass
+			#print("passable")
+		
+		if (flags & (1 << 4)) > 0:
+			pass
+			#print("one way")
+		
+		if (flags & (1 << 5)) > 0:
+			pass
+			#print("toggle")
+		
+		
+		if(flags & (1 << 7 )) > 0:
+			#print("y axis")
+			#initialRot = Vector3(90,0,0)
+			axis = Vector3(0,0,1)
+			
+		if (flags & (1 << 6)) > 0:
+			#print("x axis")
+			axis = Vector3(-1,0,0)
+		
+		if(flags & (1 << 8)) > 0:
+			#print("use oonly")
+			pass
+			
 	doorComponent.set_meta("axis",axis)
+	
 	if dict.has("TARGETNAME"):
 		doorComponent.add_to_group(dict["TARGETNAME"])
 	
@@ -613,8 +821,11 @@ func parseRotating(dict):
 	var BBMin = (bushModelInfo["BBMin"])
 	var BBMax = (bushModelInfo["BBMax"])
 	var origin = Vector3.ZERO
-	var flags = int(dict["SPAWNFLAGS"])
+	var flags = 0
 	var axis = Vector3(0,1,0)
+	
+	if dict.has("SPAWNFLAGS"):
+		flags = int(dict["SPAWNFLAGS"])
 	
 	if (flags & (1 << 2)) > 0 or (flags & (1 << 3)) > 0:
 		axis = Vector3.ZERO
@@ -763,6 +974,32 @@ func parseTriggerTransition(dict):
 	deleteModelNode(modelInfo)
 
 
+func parseLadder(dict):
+	var modelInfo = getModelInfoFromDict(dict)
+	var interactionBox = createInteractionAreaNode(modelInfo,3)
+	interactionBox.translation = modelInfo["BBMin"]+ (modelInfo["BBMax"] - modelInfo["BBMin"])*0.5
+	interactionBox.name = "ladder"
+	var scriptRes = load("res://addons/gldsrcBSP/funcScripts/func_ladder.gd")
+	interactionBox.set_script(scriptRes)
+	
+	get_parent().get_node("triggers").add_child(interactionBox)
+
+	
+	deleteModelNode(modelInfo)
+
+func parseTriggerPush(dict):
+	var modelInfo = getModelInfoFromDict(dict)
+	var interactionBox = createInteractionAreaNode(modelInfo,3)
+	interactionBox.translation = modelInfo["BBMin"]+ (modelInfo["BBMax"] - modelInfo["BBMin"])*0.5
+	interactionBox.name = "ladder"
+	var scriptRes = load("res://addons/gldsrcBSP/funcScripts/trigger_push.gd")
+	interactionBox.set_script(scriptRes)
+	
+	get_parent().get_node("triggers").add_child(interactionBox)
+
+	
+	deleteModelNode(modelInfo)
+	
 func parseTriggerChangeLevel(dict):
 	
 	var modelInfo = getModelInfoFromDict(dict)
@@ -789,7 +1026,12 @@ func parseTriggerAuto(dict):
 		node.set_meta("target",dict["TARGET"])
 	
 	node.name = "trigger_auto"
-	node.set_meta("delay",dict["DELAY"])
+	var delay = 0
+	
+	if dict.has("DELAY"):
+		delay = dict["DELAY"]
+	
+	node.set_meta("delay",delay)
 	node.set_script(scriptRes)
 	get_parent().get_node("triggers").add_child(node)
 
@@ -803,6 +1045,18 @@ func parseTriggerAutoSave(dict):
 	get_parent().get_node("triggers").add_child(interactionBox)
 	deleteModelNode(modelInfo)
 
+
+func parseTriggerCDAudio(dict):
+	var modelInfo = getModelInfoFromDict(dict)
+	var interactionBox = createInteractionAreaNode(modelInfo)
+	interactionBox.translation = modelInfo["BBMin"]+ (modelInfo["BBMax"] - modelInfo["BBMin"])*0.5
+	var audioId = int(dict["HEALTH"])
+	if audioId <= 1:
+		return
+	
+	get_parent().get_node("triggers").add_child(interactionBox)
+	deleteModelNode(modelInfo)
+	
 
 	
 func getUniqeParents(targetNodes):
@@ -849,10 +1103,24 @@ func doRenderModes():
 		for f in faces:
 			if get_parent().faceIndexToMaterialMap.has(f):
 				var mat = get_parent().faceIndexToMaterialMap[f].duplicate()
-				if i["RENDERAMT"] < 1:
-					
+				
+				if i["renderMode"] == RENDERMODE.color:
+					mat.albedo_texture = null
+					mat.albedo_color = i["RENDERCOLOR"]
+					mat.albedo_color.a = i["RENDERAMT"]
+				
+				if i["renderMode"] == RENDERMODE.texture:
 					mat.flags_transparent = true
 					mat.albedo_color.a = i["RENDERAMT"]
+				
+				if i["renderMode"] == RENDERMODE.solid:
+					mat.flags_transparent = true
+					
+				
+				if i["renderMode"] == RENDERMODE.additive:
+					mat.albedo_color.a = i["RENDERAMT"]
+					mat.params_blend_mode = mat.BLEND_MODE_ADD
+				
 				var testM = get_parent().faceMeshNodes[f]
 				testM.set_surface_material(0,mat)
 			#breakpoint
@@ -872,7 +1140,7 @@ func parseRenderMode(dict):
 	
 	if mode == 0:
 		return
-	if mode != RENDERMODE.solid:
+	if mode != 111111:
 		if !dict.has("MODEL"):
 			return
 		
@@ -892,16 +1160,21 @@ func parseRenderMode(dict):
 		
 		if dict.has("RENDERCOLOR"):
 			if dict["RENDERCOLOR"] != "0":
-				color = textToVector3i(dict["RENDERCOLOR"])/255
+				color = dict["RENDERCOLOR"]#/255
+				color  = color.split(" ")
+				var cx = int(color[0])
+				var cy = int(color[1])
+				var cz = int(color[2])
+				color = Color8(int(cx),int(cy),int(cz))
 		
-		get_parent().renderModeFaces.append({"MODEL":model,"RENDERAMT":amount})
+		get_parent().renderModeFaces.append({"MODEL":model,"renderMode":mode,"RENDERAMT":amount,"RENDERCOLOR":color})
 		get_parent().modelRenderModes[model] = {"renderMode":mode,"amount":amount}
 
 func parseMultiManager(dict):
 	var targetGroups = []
 	for i in dict.keys():
 		if i != "TARGETNAME" and i != "CLASSNAME" and i!= "ORIGIN":
-			targetGroups.append(i)
+			targetGroups.append({"name":i,"delay":dict[i]})
 	
 
 	var node = Node.new()
@@ -927,6 +1200,9 @@ func parsePathCorner(dict):
 	else:
 		cornerPaths[node.name] = null
 	
+	if dict.has("MESSAGE"):
+		node.set_meta("trigger",dict["MESSAGE"])
+	
 	get_parent().add_child(node)
 
 func parsePathTrack(dict):
@@ -938,35 +1214,47 @@ func parsePathTrack(dict):
 		trackPaths[node.name] = dict["TARGET"]
 	else:
 		trackPaths[node.name] = null
-	
+		
+	if dict.has("MESSAGE"):
+		node.set_meta("trigger",dict["MESSAGE"])
 	get_parent().add_child(node)
 
 
 func parseTrain(dict):
+	
 	var faceMeshNodes = get_parent().faceMeshNodes
-	var bushModelInfo = getModelInfoFromDict(dict)
-	var targetFaces = bushModelInfo["faceArr"]
+	var brushModelInfo = getModelInfoFromDict(dict)
+	var targetFaces = brushModelInfo["faceArr"]
 	var targetNodeArr = []
 	var pathArr = []
+	
+	
+	#if dict.has("SPAWNFLAGS"):
+	#	if int(dict["SPAWNFLAGS"]) == 8:
+	#		deleteModelNode(brushModelInfo)
+	
 	if !dict.has("TARGET"):#if train dosen't have a traget corner it won't move so nothing needs to happen
 		return
 	
 	var a = dict["TARGET"]
+	print("Start loop")
 	while(a != null):
 		
 		if !cornerPaths.has(a):
 			return
 		
 		var b = cornerPaths[a]
+		
+		
 		pathArr.append(a)
 		a = b
-		
+		print(pathArr.size())
 		if cornerPaths.size()>1:
 			if b == pathArr[0]:#the loop has been closed
 				break
 	
 
-
+	
 	for i in targetFaces:
 		if faceMeshNodes.has(i):
 			targetNodeArr.append(faceMeshNodes[i].get_parent().name)
@@ -989,7 +1277,7 @@ func parseTrackTrain(dict):
 	var targetFaces = bushModelInfo["faceArr"]
 	var targetNodeArr = []
 	var origin = Vector3.ZERO
-	
+	var sound = -1
 	origin = textToVector3(dict["ORIGIN"])
 	
 
@@ -1010,6 +1298,7 @@ func parseTrackTrain(dict):
 	
 	while(a != null):
 		var b = trackPaths[a]
+		
 		pathArr.append(a)
 		a = b
 		
@@ -1019,19 +1308,58 @@ func parseTrackTrain(dict):
 		
 		if trackPaths.size()>1:
 			if b == pathArr[0]:#the loop has been closed
-			
+				pathArr.append(b)
 				break
-				
+	
+	var path = Path.new()
+	var tarr = []
+	for i in pathArr:
+		var node : Position3D = (get_parent().find_node(i,true,false))
+		if node.has_meta("trigger"):
+			var triggerName = node.get_meta("trigger")
+			
+			path.set_meta(triggerName,node.translation)
+			#var areaNode = Area.new()
+			#var collisionNode = CollisionShape.new()
+			#var shapeNode = BoxShape.new()
+			
+			#shapeNode.extents = Vector3(scaleFactor*5,scaleFactor*5,scaleFactor*5)
+			#collisionNode.shape = shapeNode
+			#areaNode.add_child(collisionNode)
+			#node.add_child(areaNode)
+			#areaNode.name = nameStr
+		
+		
+		path.curve.add_point(node.translation)
+		
+
+		
+		
+		
+	path.set_meta("scaleFactor",scaleFactor)
+	path.add_child(PathFollow.new())
+	get_parent().add_child(path)
 	var scriptRes = load("res://addons/gldsrcBSP/funcScripts/func_track_train.gd")
 	var trainNode= Spatial.new()
 
+	if dict.has("SOUNDS"):
+		sound = int(dict["SOUNDS"])
+		var audioNode = get_parent().createAudioPlayer3DfromName(TRAINSOUNDS[sound])
+		audioNode.name = "moveSound"
+		trainNode.add_child(audioNode)
+
+	trainNode.translation = origin
+	trainNode.name ="func_tracktrain"
 	trainNode.set_meta("targetNodePaths",targetNodeArr)
 	trainNode.set_meta("path",pathArr)
+	trainNode.set_meta("pathName",path.name)
 	trainNode.set_script(scriptRes)
 
 	get_parent().add_child(trainNode)
 
 func parseAmbientGeneric(dict):
+	if !dict.has("MESSAGE"):
+		return
 	var par = get_parent().get_node_or_null("Ambient Sounds")
 	if par == null:
 		par = Node.new()
@@ -1044,6 +1372,8 @@ func parseAmbientGeneric(dict):
 
 	var pos = textToVector3(dict["ORIGIN"])
 	var audioNode = get_parent().createAudioPlayer3DfromName(dict["MESSAGE"].to_lower())
+	if dict.has("MESSAGE"):
+		audioNode.name= dict["MESSAGE"]
 	var volume = int(dict["HEALTH"])
 	#audioNode.unit_db = 0.5 * (volume/10.0)
 	audioNode.max_db = 1
@@ -1057,13 +1387,14 @@ func parseAmbientGeneric(dict):
 	var scriptRes = load("res://addons/gldsrcBSP/funcScripts/ambient_generic.gd")
 	audioNode.set_script(scriptRes)
 	audioNode.autoplay = true
-	
+	var playEverywhere = false
 	if dict.has("SPAWNFLAGS"):
 		var flags = int(dict["SPAWNFLAGS"])
 		
 		if flags & (1 << 0) > 0:
-			pass
-			#print("play everywhere")
+			audioNode.unit_size = 100000000
+			playEverywhere = true
+			
 		if flags & (1 << 1) > 0:
 			pass
 			#print("small radius")
@@ -1090,9 +1421,23 @@ func parseAmbientGeneric(dict):
 
 	#audioNode.stream.save_to_wav("test.wav")
 	
+func parseModel(dict,modelName):
+	var pos = textToVector3(dict["ORIGIN"])
+	var baseDir = get_parent().wadDict["baseDirectory"]
+	
+	
+	var mesh = $"../mdlLoader".mdlParse(baseDir + "models/" + modelName)
+	mesh.scale *= scaleFactor
+	#mesh.rotation_degrees.x -= 90
+	mesh.translation = pos
+	
+	
+	get_parent().add_child(mesh)
+	#breakpoint
 
-func parseIllusionary():
-	breakpoint
+func parseIllusionary(dict):
+	var modelInfo = getModelInfoFromDict(dict)
+	deleteModelCollision(modelInfo)
 
 func deleteModelNode(modelInfo):
 	var modelFaceIdxs = modelInfo["faceArr"]
@@ -1106,4 +1451,32 @@ func deleteModelNode(modelInfo):
 			#if get_parent().faceMeshNodes[faceIdx] == null:
 			#	breakpoint
 				
+
+func deleteModelCollision(modelInfo):
+	var modelFaceIdxs = modelInfo["faceArr"]
+	var deleted = false
+	for faceIdx in modelFaceIdxs:
+		if get_parent().faceMeshNodes.has(faceIdx):
+			if get_parent().faceMeshNodes[faceIdx] != null:#whis is this nulled?
+				
+				var par = get_parent().faceMeshNodes[faceIdx].get_parent()
+				#print(par.get_type())
+				for i in par.get_children():
+					if i.get_class() == "MeshInstance":
+						i.get_parent().remove_child(i) 
+						par.remove_child(i)
+						i.translation += par.translation
+						var parp = i.get_parent()
+						par.get_parent().add_child(i)
+					else:
+						i.queue_free()
+				par.queue_free()
+				deleted = true
+
+func guessWadPath(path):
+	if path.find_last("Half-Life") != -1:
+		var pathPre = path.substr(0, path.find_last("Half-Life"))
+		return pathPre + "Half-Life/valve/halflife.wad" 
+	else:
+		return null
 

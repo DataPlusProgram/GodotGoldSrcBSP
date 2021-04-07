@@ -8,7 +8,7 @@ var pos = 0
 func loadFile(path):
 	var file = File.new()
 	if file.open(path,File.READ) != 0:
-		print("Error opening file")
+	#	print("Error opening file:")
 		return false
 	data = file.get_buffer(file.get_len())
 	

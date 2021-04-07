@@ -4,9 +4,11 @@ var targetNodes = []
 var pathName = []
 var pathPosArr = []
 var refArr = {}
+var scaleFactor 
 func _ready():
 	var targetNodesPath = get_meta("targetNodePaths")
 	var pathName = get_meta("path")
+	var scaleFactor = get_meta("scaleFactor")
 	for i in targetNodesPath:
 		var gp= get_parent()
 		targetNodes.append(gp.get_node("Geometry").get_node(i))
@@ -40,5 +42,7 @@ func setOrigin(node,origin):
 	node.translation = origin
 
 func _physics_process(delta):
+	
 	for n in targetNodes:
-		n.translation = n.translation.linear_interpolate(pathPosArr[0]+refArr[n],0.0001)
+		if n!= null:
+			n.translation = n.translation.linear_interpolate(pathPosArr[0]+refArr[n],0.0001)

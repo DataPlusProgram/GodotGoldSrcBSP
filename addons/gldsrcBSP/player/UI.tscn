@@ -1,0 +1,57 @@
+[gd_scene load_steps=3 format=2]
+
+[ext_resource path="res://icon.png" type="Texture" id=1]
+[ext_resource path="res://scripts/player/Crosshair.gd" type="Script" id=2]
+
+[node name="UI" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="TextureRect" type="TextureRect" parent="."]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+margin_left = 487.5
+margin_top = 276.0
+margin_right = 496.5
+margin_bottom = 284.0
+texture = ExtResource( 1 )
+expand = true
+stretch_mode = 1
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="Crosshair" type="Node2D" parent="."]
+position = Vector2( 512, 300 )
+script = ExtResource( 2 )
+gap = 8
+length = 10
+thickness = 5
+color = Color( 0.858824, 0, 0, 0.552941 )
+
+[node name="right" type="Line2D" parent="Crosshair"]
+points = PoolVector2Array( 8, 0, 18, 0 )
+width = 5.0
+default_color = Color( 0.858824, 0, 0, 0.552941 )
+
+[node name="left" type="Line2D" parent="Crosshair"]
+points = PoolVector2Array( -8, 0, -18, 0 )
+width = 5.0
+default_color = Color( 0.858824, 0, 0, 0.552941 )
+
+[node name="up" type="Line2D" parent="Crosshair"]
+points = PoolVector2Array( 0, -18, 0, -8 )
+width = 5.0
+default_color = Color( 0.858824, 0, 0, 0.552941 )
+
+[node name="down" type="Line2D" parent="Crosshair"]
+position = Vector2( 0.105103, 0 )
+points = PoolVector2Array( 0, 18, 0, 8 )
+width = 5.0
+default_color = Color( 0.858824, 0, 0, 0.552941 )
+round_precision = 14

@@ -4,9 +4,13 @@ extends Node
 func _ready():
 	set_meta("hidden",true)
 	
-func createImage(fileDict,isDecal = false):
-	
-	var imageDict = parseTexture(fileDict["file"],fileDict["offset"],fileDict["size"])
+func createImage(fileDict,isDecal = false,imageDictParam = null):#imageDictParam is used when the texture is within the BSP itself instead of external WAD
+	var imageDict
+	if imageDictParam == null:
+		imageDict = parseTexture(fileDict["file"],fileDict["offset"],fileDict["size"])
+	else:
+		imageDict = imageDictParam
+		
 	if !imageDict.has("data"):
 		return
 		

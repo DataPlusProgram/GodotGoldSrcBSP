@@ -2,9 +2,7 @@ tool
 extends Node
 
 
-# Declare member variables here. Examples:
-# var a = 2
-# var b = "text"
+
 var file
 var fileDict = {}
 
@@ -15,7 +13,7 @@ func _ready():
 
 func getStreamFromWAV(path):
 	file = load("res://addons/gldsrcBSP/DFile.gd").new()
-	#path = "E://Games/steamapps/common/Half-Life/valve/sound/ambience/computalk2.wav"
+	
 	if !file.loadFile(path):
 		print("audio file not found:" + path)
 		return AudioStreamSample.new()
@@ -35,15 +33,19 @@ func getStreamFromWAV(path):
 	if chunkId == "LIST":
 		parseList()
 	
-	chunkId = file.get_String(4)
 	var cueArr = []
-	if chunkId == "CUE ":
-		cueArr = parseCue()
+	if !file.eof_reached():
+		chunkId = file.get_String(4)
+		
+		if chunkId == "CUE ":
+			cueArr = parseCue()
+	
+	stream.loop_end = stream.data.size()
 	
 	if cueArr.size()>0:
 		stream.loop_mode = AudioStreamSample.LOOP_FORWARD
 		stream.loop_begin = cueArr[0]
-		stream.loop_end = stream.data.size()
+		
 	
 	if cueArr.size()>1:
 		stream.loop_end = cueArr[1]

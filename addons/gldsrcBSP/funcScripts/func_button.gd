@@ -34,8 +34,9 @@ func _physics_process(delta):
 				print(timer)
 	
 func activate():
+	
 	for i in get_tree().get_nodes_in_group(targetName):
-		
+		print(i.name)
 		if "locked" in i:
 			i.locked = false
 		i.activate()

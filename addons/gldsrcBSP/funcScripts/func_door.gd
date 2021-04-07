@@ -13,7 +13,7 @@ var dim
 var inc = Vector3.ZERO
 var lip = 0
 var rot = Vector3(0,0,0)
-var dir = Vector3.ZERO
+var dir = Vector3(-1,0,0)
 var destScaler = Vector3(0,0,0)
 var destination = Vector3.ZERO
 var speed = 300
@@ -24,7 +24,9 @@ var lockedSound
 var target = null
 var open = false
 func _ready():
-	
+
+	#if name == "G_DOOR":
+	#	breakpoint
 	dim = get_meta("dim")#Vector3(dimX,dimY,dimZ)
 	scaleFactor = get_meta("scaleFactor")
 	if has_meta("lip"):  lip = get_meta("lip")
@@ -73,16 +75,20 @@ func _ready():
 		
 		destination = (dim*destScaler) - (destScaler*lip)
 
-		
+	
 	elif has_meta("angle"):
 		angle = get_meta("angle")
 
 		dir = angle
 		destination = angle*dim
-
+	else:
+		destination = dir*dim
+	
+	#print(name,":",dir,":",destination)
 	
 
 func _physics_process(delta):
+	
 	collisions()
 	if !active:
 		return

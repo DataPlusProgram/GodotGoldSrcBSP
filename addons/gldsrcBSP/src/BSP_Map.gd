@@ -10,6 +10,7 @@ var directory = {}
 onready var imageBuilder = get_node("ImageBuilder")
 onready var levelBuilder = get_node("levelBuilder")
 onready var entityDataParser = get_node("entityDataParser")
+onready var bmlLoader = get_node("bmpLoader")
 var wadDict = {}
 export(Array,String,FILE) var additionalWadDirs = [""]
 var vertices
@@ -27,13 +28,13 @@ var postPostFuncBrushes = []
 var edgeToFaceIndexMap = {}
 var faceMeshNodes = {}
 var lightNodes = null
-var brushNodes = null
+var brushNodes =  null
 var firstTick = true
 var playerSpawnSet = false
 var hotFaces = []
 var renderModeFaces = []
 export var optimize = true
-
+export var textureFilterSkyBox = true
 export var enableEntities = true
 var simpleCombine = false
 export var disableSound = false
@@ -44,12 +45,15 @@ var nameToPathMap = {}
 var materialCache = {}
 var textureToFacesDict = {}
 var modelRenderModes = {}
+var textureToMaterialDict = {}
+var skyTexture = "desert"
 
 var LUMP_NANES = [
 			"LUMP_ENTITES","LUMP_PLANES","LUMP_TEXTURES","LUMP_VERTICES","LUMP_VISIBILITY",
 			"LUMP_NODES","LUMP_TEXINFO","LUMP_FACES","LIGHTING","LLUMP_CLIPNODES","LUMP_LEAVES",
 			"LUMP_MARKSURFACES","LUMP_EDGES", "LUMP_SURFEDGES","LUMP_MODELS","HEADER_LUMPS",
 			]
+
 
 
 export(String,FILE) var path = "Enter path to BSP here"
@@ -62,21 +66,27 @@ export var cacheMaterials = true
 export var collisions = true
 export var lights = true
 func _ready():
+	#cubeMapToPanorama()
 	
 	if !Engine.is_editor_hint():
 		if !find_node("Geometry"):
 			createMap()
-	pass
+	
 	
 
 
 func createMap():
 	levelBuilder = get_node("levelBuilder")
 	entityDataParser = get_node("entityDataParser")
+	if entityDataParser == null:
+		var node = Node.new()
+		node.set_script(load("res://addons/gldsrcBSP/src/entityDataParser.gd"))
+		entityDataParser = node
+		add_child(node)
+	
 	imageBuilder = get_node("ImageBuilder")
 	postFuncBrushes = []
 	
-	add_child(imageBuilder)
 	lightNodes = Spatial.new()
 	lightNodes.name = "Lights"
 	add_child(lightNodes)
@@ -90,18 +100,20 @@ func createMap():
 	triggers.name = "triggers"
 	add_child(triggers)
 	
-	var mergedFaces = Spatial.new()
-	mergedFaces.name = "mergedFaces"
-	add_child(mergedFaces)
-	
+
 	var decals = Spatial.new()
 	decals.name = "decals"
 	add_child(decals)
 	
 	if loadBSP() == false:
 		print("failed to load BSP file")
+		remove_child($"decals")
+		remove_child($"triggers")
+		remove_child($"Lights")
+		remove_child($"BrushEntities")
 		return
-
+	
+	readMaterialSounds()
 	levelBuilder.createLevel(directory,wadDict)
 	#entityDataParser.sortEntityBrushesIntoNodes(brushModels)
 	if enableEntities == false:
@@ -113,8 +125,12 @@ func createMap():
 			entityDataParser.parseDoor(i)
 		elif i["CLASSNAME"] == "FUNC_BUTTON":
 			entityDataParser.parseButton(i)
+		elif i["CLASSNAME"] == "FUNC_BUTTON_ROTATING":
+			entityDataParser.parseButton(i)
 		elif i["CLASSNAME"] == "FUNC_WALL":
 			entityDataParser.parseWall(i)
+		elif i["CLASSNAME"] == "FUNC_ROTATING":
+			entityDataParser.parseRotating(i)
 		elif i["CLASSNAME"] == "FUNC_DOOR_ROTATING":
 			entityDataParser.parseDoorRotating(i)
 		elif i["CLASSNAME"] == "TRIGGER_ONCE":
@@ -123,7 +139,9 @@ func createMap():
 			entityDataParser.parseTriggerMultiple(i)
 		elif  i["CLASSNAME"] == "FUNC_PUSHABLE":
 			entityDataParser.parsePushable(i)
-		elif i["CLASSNAME"] == "FUNC_ROTATING":
+		elif i["CLASSNAME"] == "FUNC_ROT_BUTTON":
+			entityDataParser.parseRotButton(i)
+		elif i["CLASSNAME"] == "FUNC_PENDULUM":
 			entityDataParser.parseRotating(i)
 		elif i["CLASSNAME"] == "FUNC_BREAKABLE":
 			entityDataParser.parseBreakable(i)
@@ -137,12 +155,19 @@ func createMap():
 			entityDataParser.parseTriggerTransition(i)
 		elif i["CLASSNAME"] == "TRIGGER_AUTOSAVE":
 			entityDataParser.parseTriggerAutoSave(i)
+		elif i["CLASSNAME"] == "TRIGGER_PUSH":
+			entityDataParser.parseTriggerPush(i)
 		elif i["CLASSNAME"] == "TRIGGER_TELEPORT":
 			entityDataParser.parseTriggerAutoSave(i)
 		elif i["CLASSNAME"] == "TRIGGER_HURT":
 			entityDataParser.parseTriggerAutoSave(i)
 		elif i["CLASSNAME"] == "TRIGGER_CHANGELEVEL":
 			entityDataParser.parseTriggerChangeLevel(i)
+		elif i["CLASSNAME"] == "TRIGGER_CDAUDIO":
+			entityDataParser.parseTriggerCDAudio(i)
+		elif i["CLASSNAME"] == "FUNC_ILLUSIONARY":
+			entityDataParser.parseIllusionary(i)
+		
 	
 	for i in postPostFuncBrushes:#parsing multimanger last just in case
 		if i["CLASSNAME"] == "MULTI_MANAGER":
@@ -159,6 +184,7 @@ func _process(delta):
 
 func loadBSP():
 	file = load("res://addons/gldsrcBSP/DFile.gd").new()
+	path = path.replace("\\","/")
 	if !file.loadFile(path):
 		print("file not found:", path)
 		return false
@@ -297,6 +323,7 @@ func parse_faces(facesDict):
 		var nStyles3 = file.get_8()
 		var nStyles4 = file.get_8()
 		dict["nStyles"] = [nStyles1,nStyles2,nStyles3,nStyles4]
+		
 		dict["lightmapOffset"] = file.get_32()
 		dict["edges"] = []
 		for j in range(dict["firstEdgeIndex"],dict["firstEdgeIndex"]+dict["nEdges"]):
@@ -376,7 +403,7 @@ func parse_texture(textureDict):
 	#textureDict["images"] = []
 	var textureImagesArr = []
 	var textureOffsets = []
-	var textureArr = []
+
 	
 	var numberOfTextures = file.get_32()
 	for i in numberOfTextures:
@@ -386,6 +413,7 @@ func parse_texture(textureDict):
 		file.seek(i)
 		var cur = {}
 		var fName  = file.get_String(16)
+		
 		var w = file.get_32u()
 		var h = file.get_32u()
 		
@@ -396,7 +424,7 @@ func parse_texture(textureDict):
 		
 		if mip1 == 0:
 			#textureDict["images"].append({"dim":[w,h],"name":fName})
-			textures.append({"dim":[w,h],"name":fName})
+			textures.append({"dim":[w,h],"name":fName,"external":true})
 			continue
 		
 		var mip1sz = mip2 - mip1
@@ -464,26 +492,35 @@ func fetchTexture(textureName,isDecal = false):
 	if textureCache.has(textureName):
 		return textureCache[textureName]
 	
+	
 	for i in wadDict:
 		if typeof(wadDict[i]) != TYPE_DICTIONARY:
 			continue
 			
 		if wadDict[i].has(textureName):
 			var textureFile = wadDict[i][textureName]
-			
 			var texture = imageBuilder.createImage(textureFile,isDecal)
 			textureCache[textureName] = texture
 			return texture
+	
+	
+	for i in textures:
+		if i.name == textureName:
+			if i.has("data"):
+				var texture = imageBuilder.createImage(null,isDecal,i)
+				textureCache[textureName] = texture
+				return texture
+	print("texture not found:",textureName)
 #	breakpoint
  
 func loadSound(fileName):
-		var dir = path
-		dir  = dir.substr(0,dir.find_last('/'))
-		dir  = dir.substr(0,dir.find_last('/'))
-		dir = dir + "/sound/" + fileName
+	var dir = path
+	dir  = dir.substr(0,dir.find_last('/'))
+	dir  = dir.substr(0,dir.find_last('/'))
+	dir = dir + "/sound/" + fileName
 		
-		var stream = get_node("waveLoader").getStreamFromWAV(dir)
-		return stream
+	var stream = get_node("waveLoader").getStreamFromWAV(dir)
+	return stream
 		
 func createAudioPlayer3DfromName(fileName):
 	fileName = fileName.replace("*","")
@@ -494,7 +531,7 @@ func createAudioPlayer3DfromName(fileName):
 	var player = AudioStreamPlayer3D.new()
 	player.stream = stream
 	return player
-	
+
 func fetchMaterial(nameStr):
 	var isFirstINstance = false
 	if !materialCache.has(nameStr) or !cacheMaterials:
@@ -508,3 +545,51 @@ func fetchMaterial(nameStr):
 	
 func saveToMaterialCache(nameStr,mat):
 	materialCache[nameStr] = mat
+
+func readMaterialSounds():
+	var dir = path
+	dir  = dir.substr(0,dir.find_last('/'))
+	dir  = dir.substr(0,dir.find_last('/'))
+	var matPath = dir + "/sound/materials.txt"
+	var materialFile = File.new()
+	var result = materialFile.open(matPath,materialFile.READ)
+	if result != 0:
+		return
+	
+	var content = materialFile.get_as_text()
+	content = content.split("\n")
+	
+		
+	for line in content:
+		if line.length() == 0:
+			continue
+		if line[0] == "/":
+			continue
+		line = line.split(" ")
+		var matType = line[0]
+		var textureName = line[1]
+		textureToMaterialDict[textureName] = matType
+
+func cubeMapToPanorama():
+	
+	var top = load("res://text/morningup.bmp")
+	var bottom = "res://text/morningdn.bmp"
+	var front = "res://text/morningft.bmp"
+	var back = "res://text/morningbk.bmp"
+	var left = "res://text/morninglf.bmp"
+	var right = "res://text/morningrt.bmp"
+	var tex = ImageTexture.new()
+	
+	var file = File.new()
+	
+	var buffer = file.get_buffer(file.get_len())
+	var image = Image.new()
+	
+	image.load_tga_from_buffer(buffer)
+	#print(image.get_data().size())
+	#var topTexture = top.create_from_image(top)
+
+	tex.create_from_image(image)
+	$"../Sprite".texture = tex
+
+	

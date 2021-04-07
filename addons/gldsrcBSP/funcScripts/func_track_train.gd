@@ -4,31 +4,61 @@ var targetNodes = []
 var pathName = []
 var pathPosArr = []
 var refArr = {}
+var triggers = []
+var initialRot = 0
+var moveSound : AudioStreamPlayer3D = null
+
+onready var path = null#get_parent().find_node("testo",true,false)
+onready var pathFollow : PathFollow =null# path.get_child(0)
 func _ready():
 	var targetNodesPath = get_meta("targetNodePaths")
 	var pathName = get_meta("path")
+	
 	for i in targetNodesPath:
 		var gp= get_parent()
 		targetNodes.append(gp.get_node("Geometry").get_node(i))
 	
-	
+	if has_meta("pathName"):
+		var nameStr= get_meta("pathName")
+		path =  get_parent().find_node(nameStr,true,false)
+		pathFollow = path.get_child(0)
+		
 	var ref = targetNodes[0].translation
 	
-	for i in targetNodes:
-		var firstPosNode =  get_parent().find_node(pathName[0],true,false)
-		i.translation -= ref
-		refArr[i] = i.translation 
-		i.translation +=  firstPosNode.translation
-		
-
-		
-	pathName.pop_front()
+	var triggerTargets = path.get_meta_list()
+	for t in triggerTargets:
+		var pos = path.get_meta(t)
+		if typeof(pos) == TYPE_VECTOR3:
+			triggers.append({"name":t,"position":pos})
 	
-	for i in pathName:
+	for i in pathName:#name of each path node
 		var destination = get_parent().find_node(i,true,false)
 		if destination != null:
 			pathPosArr.append(destination.translation)
+	
+	moveSound = get_node("moveSound")
+	
+
+
+	for i in targetNodes:#for all target faces set origin to ref and add path translation
+		var firstPosNode =  get_parent().find_node(pathName[0],true,false)
+		i.translation -= ref
+		refArr[i] = i.translation 
+		i.translation +=  pathPosArr[0]
+
+	
+	translation = pathPosArr[0]
+	
+	if pathPosArr.size() > 2:
+		var a : Vector2 =  Vector2(pathPosArr[0].x,pathPosArr[0].z)
+		var b : Vector2 =  Vector2(pathPosArr[1].x,pathPosArr[1].z)
+		var diff = (b-a).normalized()
+		initialRot = atan2(diff.y,diff.x)
+
 		
+		
+	pathPosArr.pop_front()
+
 
 func setOrigin(node,origin):
 	for c in  node.get_children():
@@ -38,10 +68,31 @@ func setOrigin(node,origin):
 	node.translation = origin
 
 func _physics_process(delta):
+	
+	
+	pathFollow.offset += delta*10
+	
+	translation = pathFollow.translation
+	
+	for i in triggers:
+		if pathFollow.translation.distance_to(i["position"]) < 10:
+			get_tree().call_group(i["name"],"activate")
+			triggers.erase(i)
+			
+
 	for n in targetNodes:
-		#n.look_at(pathPosArr[0]+refArr[n],Vector3.UP)
-		n.translation = n.translation.linear_interpolate(pathPosArr[0]+refArr[n],0.01)
-		if n.translation.distance_to(pathPosArr[0]+refArr[n]) < 5:
-			n.translation = pathPosArr[0]+refArr[n]
-			if pathPosArr.size()>1:
-				pathPosArr.pop_front()
+		n.translation = pathFollow.translation
+		n.rotation = pathFollow.rotation - Vector3(0,initialRot,0)
+	
+		#var target =  pathFollow.rotation + Vector3(0,initialRot,0)
+		#n.rotation.y = lerp(n.rotation.y,target.y,0.1)
+
+	if moveSound != null:
+		if !moveSound.playing:
+			if moveSound.stream != null:
+				moveSound.stream.loop_mode = AudioStreamSample.LOOP_FORWARD
+
+				moveSound.unit_db = 10
+				moveSound.play()
+
+
