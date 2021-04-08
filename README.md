@@ -1,6 +1,7 @@
 # GodotGoldSrcBSP
 
 ## Video Demo
+[![](https://i.imgur.com/s7qvyzL.png)](https://www.youtube.com/watch?v=3_V40Sp9_KA)
 [![](https://imgur.com/OZfb7bd.png)](https://www.youtube.com/watch?v=L9pk3B7MdSE)  
 ## Installation
 Copy the "addons" folder into the root directory of the Godot Project  
