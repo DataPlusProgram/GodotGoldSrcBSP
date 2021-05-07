@@ -299,13 +299,14 @@ func createMeshFromFanArr(fans,faceIndex):
 		localSurf.commit(runningMesh)
 
 		
-		if textureName!="SKY" and mat!=null:
-			mat.albedo_texture = texture
-			if get_parent().importLightmaps:
-				mat.detail_uv_layer = SpatialMaterial.DETAIL_UV_2
-				mat.detail_enabled = true
-				mat.detail_albedo = atlasTexture
-				mat.detail_blend_mode = SpatialMaterial.BLEND_MODE_MUL
+		if mat!=null:
+			if textureName!="SKY":
+				mat.albedo_texture = texture
+				if get_parent().importLightmaps:
+					mat.detail_uv_layer = SpatialMaterial.DETAIL_UV_2
+					mat.detail_enabled = true
+					mat.detail_albedo = atlasTexture
+					mat.detail_blend_mode = SpatialMaterial.BLEND_MODE_MUL
 		
 			runningMesh.surface_set_material(count,mat)
 			runningMesh.surface_set_name(count,textureName)

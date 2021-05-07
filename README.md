@@ -3,8 +3,8 @@
 A plugin that allows you to laod GoldSrc BSP files into Godot
 
 ## Video Demo
-[![](https://i.imgur.com/s7qvyzL.png)](https://www.youtube.com/watch?v=3_V40Sp9_KA)
-[![](https://imgur.com/OZfb7bd.png)](https://www.youtube.com/watch?v=L9pk3B7MdSE)  
+[![](https://i.imgur.com/UbihCVB.png)](https://www.youtube.com/watch?v=-gloaTbZxmU)
+ 
 ## Installation
 Copy the "addons" folder into the root directory of the Godot Project  
  
@@ -23,6 +23,10 @@ If you want the map to generate on runtime don't press "Create Map" and it will 
 This plugin supports various but not all entities.  
 If you want a body to trigger/interact with the entities add it to the "hlTrigger" group.  
 
+## Lightmaps  
+
+You can import lightmaps from the BSP file but you will need to set your enviroment to "Clear Color" and up the ambient light.
+
 ## Media 
 
-![](https://i.imgur.com/5ghJ8Q8.png)  
+![](https://i.imgur.com/STAOPjS.jpg)  
