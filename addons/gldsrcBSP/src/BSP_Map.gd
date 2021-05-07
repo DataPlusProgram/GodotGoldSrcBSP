@@ -2,26 +2,28 @@ tool
 extends Spatial
 class_name GLDSRC_Map
 signal mapLoaded
-signal playerSpawnSignal(pos,rot)
+signal playerSpawnSignal(dict)
 var file
 var directory = {}
-
+var spawns = []
 
 onready var imageBuilder = get_node("ImageBuilder")
 onready var levelBuilder = get_node("levelBuilder")
 onready var entityDataParser = get_node("entityDataParser")
 onready var bmlLoader = get_node("bmpLoader")
+onready var lightmapAtlas = get_node("lightmapAtlas")
 var wadDict = {}
-export(Array,String,FILE) var additionalWadDirs = [""]
-var vertices
-var planes
-var edges 
-var surfaces
-var faces
-var textureInfo
+#export(Array,String,FILE) var additionalWadDirs = [""]
+var vertices = []
+var planes = []
+var edges = []
+var surfaces = []
+var renderables = []
+var renderableEdges = []
+var textureInfo = []
 var textureCache = {}
 var textures = []
-var entities
+var entities = []
 var brushModels = []
 var postFuncBrushes = []
 var postPostFuncBrushes = []
@@ -30,14 +32,23 @@ var faceMeshNodes = {}
 var lightNodes = null
 var brushNodes =  null
 var firstTick = true
+var loaded = false
 var playerSpawnSet = false
 var hotFaces = []
 var renderModeFaces = []
+var renderFaces = []
+var ligthMapOffset = null
+var lightMap = []
+var rawLightmap = []
+var entityDataArr = []
+export var importLightmaps = true
 export var optimize = true
 export var textureFilterSkyBox = true
 export var enableEntities = true
-var simpleCombine = false
 export var disableSound = false
+export var textureLights = true
+
+var simpleCombine =  true
 var physicsPropsDontRotate = true
 var playerSpawn = {"position":Vector3.ZERO,"rotation":Vector3.ZERO}
 var faceIndexToMaterialMap = {}
@@ -47,144 +58,87 @@ var textureToFacesDict = {}
 var modelRenderModes = {}
 var textureToMaterialDict = {}
 var skyTexture = "desert"
+var hlPath = null
+export var texturesPerMesh = 3
 
 var LUMP_NANES = [
 			"LUMP_ENTITES","LUMP_PLANES","LUMP_TEXTURES","LUMP_VERTICES","LUMP_VISIBILITY",
-			"LUMP_NODES","LUMP_TEXINFO","LUMP_FACES","LIGHTING","LLUMP_CLIPNODES","LUMP_LEAVES",
+			"LUMP_NODES","LUMP_TEXINFO","LUMP_FACES","LUMP_LIGHTING","LLUMP_CLIPNODES","LUMP_LEAVES",
 			"LUMP_MARKSURFACES","LUMP_EDGES", "LUMP_SURFEDGES","LUMP_MODELS","HEADER_LUMPS",
 			]
 
 
-
-export(String,FILE) var path = "Enter path to BSP here"
+export(String,FILE) var path =  "Enter path to BSP here"
 export var scaleFactor = 0.05
 export var disableTextures = false
 export var textureFiltering = false
-export var lightRangeMultiplier = 400.0
-export var lightEnergyMultiplier = 75.0
+#export var lightRangeMultiplier = 400.0
+#export var lightEnergyMultiplier = 75.0
 export var cacheMaterials = true
 export var collisions = true
-export var lights = true
+export var lights = false
 func _ready():
-	#cubeMapToPanorama()
 	
 	if !Engine.is_editor_hint():
 		if !find_node("Geometry"):
 			createMap()
-	
+
+	if get_node_or_null("spawns"):
+		var s = get_node("spawns").get_children()
+		if s.size() > 0:
+			emit_signal("playerSpawnSignal",{"pos":s[0].global_transform.origin,"rot":s[0].rotation_degrees.y})
+		else:
+			emit_signal("playerSpawnSignal",{"pos":Vector3.ZERO,"rot":0})
+
+
+
 	
 
 
 func createMap():
+	#print("---creating map---")
 	levelBuilder = get_node("levelBuilder")
-	entityDataParser = get_node("entityDataParser")
-	if entityDataParser == null:
-		var node = Node.new()
-		node.set_script(load("res://addons/gldsrcBSP/src/entityDataParser.gd"))
-		entityDataParser = node
-		add_child(node)
-	
+	entityDataParser = get_node("entityDataParser")	
 	imageBuilder = get_node("ImageBuilder")
-	postFuncBrushes = []
-	
-	lightNodes = Spatial.new()
-	lightNodes.name = "Lights"
-	add_child(lightNodes)
-	
-	
-	brushNodes = Spatial.new()
-	brushNodes.name = "BrushEntities"
-	add_child(brushNodes)
-	
-	var triggers = Spatial.new()
-	triggers.name = "triggers"
-	add_child(triggers)
-	
-
-	var decals = Spatial.new()
-	decals.name = "decals"
-	add_child(decals)
+	lightmapAtlas = get_node("lightmapAtlas")
+	clearAllData()
+	createSubNodes(["Lights","BrushEntities","triggers","decals","spawns"])
+	lightNodes = get_node("Lights")
+	brushNodes = get_node("BrushEntities")
 	
 	if loadBSP() == false:
 		print("failed to load BSP file")
-		remove_child($"decals")
-		remove_child($"triggers")
-		remove_child($"Lights")
-		remove_child($"BrushEntities")
+		deleteSubNodes(["Lights","BrushEntities","triggers","decals"])
 		return
 	
-	readMaterialSounds()
+	
 	levelBuilder.createLevel(directory,wadDict)
-	#entityDataParser.sortEntityBrushesIntoNodes(brushModels)
+	
+
+	
 	if enableEntities == false:
 		set_meta("done",true)
 		return 
 	
-	for i in postFuncBrushes:#the func brushes reference faces nodes so the map must be made first
-		if i["CLASSNAME"] == "FUNC_DOOR":
-			entityDataParser.parseDoor(i)
-		elif i["CLASSNAME"] == "FUNC_BUTTON":
-			entityDataParser.parseButton(i)
-		elif i["CLASSNAME"] == "FUNC_BUTTON_ROTATING":
-			entityDataParser.parseButton(i)
-		elif i["CLASSNAME"] == "FUNC_WALL":
-			entityDataParser.parseWall(i)
-		elif i["CLASSNAME"] == "FUNC_ROTATING":
-			entityDataParser.parseRotating(i)
-		elif i["CLASSNAME"] == "FUNC_DOOR_ROTATING":
-			entityDataParser.parseDoorRotating(i)
-		elif i["CLASSNAME"] == "TRIGGER_ONCE":
-			entityDataParser.parseTriggerOnce(i)
-		elif i["CLASSNAME"] == "TRIGGER_MULTIPLE":
-			entityDataParser.parseTriggerMultiple(i)
-		elif  i["CLASSNAME"] == "FUNC_PUSHABLE":
-			entityDataParser.parsePushable(i)
-		elif i["CLASSNAME"] == "FUNC_ROT_BUTTON":
-			entityDataParser.parseRotButton(i)
-		elif i["CLASSNAME"] == "FUNC_PENDULUM":
-			entityDataParser.parseRotating(i)
-		elif i["CLASSNAME"] == "FUNC_BREAKABLE":
-			entityDataParser.parseBreakable(i)
-		elif i["CLASSNAME"] == "TRIGGER_AUTO":
-			entityDataParser.parseTriggerAuto(i)
-		elif i["CLASSNAME"] == "FUNC_TRAIN":
-			entityDataParser.parseTrain(i)
-		elif i["CLASSNAME"] == "FUNC_TRACKTRAIN":
-			entityDataParser.parseTrackTrain(i)
-		elif i["CLASSNAME"] == "TRIGGER_TRANSITION":
-			entityDataParser.parseTriggerTransition(i)
-		elif i["CLASSNAME"] == "TRIGGER_AUTOSAVE":
-			entityDataParser.parseTriggerAutoSave(i)
-		elif i["CLASSNAME"] == "TRIGGER_PUSH":
-			entityDataParser.parseTriggerPush(i)
-		elif i["CLASSNAME"] == "TRIGGER_TELEPORT":
-			entityDataParser.parseTriggerAutoSave(i)
-		elif i["CLASSNAME"] == "TRIGGER_HURT":
-			entityDataParser.parseTriggerAutoSave(i)
-		elif i["CLASSNAME"] == "TRIGGER_CHANGELEVEL":
-			entityDataParser.parseTriggerChangeLevel(i)
-		elif i["CLASSNAME"] == "TRIGGER_CDAUDIO":
-			entityDataParser.parseTriggerCDAudio(i)
-		elif i["CLASSNAME"] == "FUNC_ILLUSIONARY":
-			entityDataParser.parseIllusionary(i)
-		
+	for i in entityDataArr:
+		entityDataParser.parseEntityData2(i)
 	
-	for i in postPostFuncBrushes:#parsing multimanger last just in case
-		if i["CLASSNAME"] == "MULTI_MANAGER":
-			entityDataParser.parseMultiManager(i)
-	entityDataParser.doRenderModes()
+	
+	entityDataParser.doRenderModes2()
 	set_meta("done",true)
+	loaded = true
 
-func _process(delta):
-	if firstTick and playerSpawnSet:# and get_meta("done"):
-		
-		get_tree().call_group("player","setSpawn",playerSpawn["position"],playerSpawn["rotation"])
-		firstTick = false
+func _physics_process(delta):
+	if loaded and !playerSpawnSet:
+		emit_signal("playerSpawnSignal",getSpawn())
+		playerSpawnSet = true
 	
 
 func loadBSP():
+	var a = OS.get_system_time_msecs()
 	file = load("res://addons/gldsrcBSP/DFile.gd").new()
 	path = path.replace("\\","/")
+	
 	if !file.loadFile(path):
 		print("file not found:", path)
 		return false
@@ -197,7 +151,10 @@ func loadBSP():
 	
 	
 	directory["version"] = file.get_32u()
-
+	
+	if path.find("cstrike"):
+		hlPath = filePath.replace("cstrike","valve")
+	
 	wadDict["baseDirectory"] = filePath
 	#filePath =  path.substr(0,path.find_last("/") )
 	for i in range(0,15):
@@ -207,18 +164,42 @@ func loadBSP():
 		directory[lumpName]["length"] = file.get_32u()
 		pass
 	
+	#a = OS.get_system_time_msecs()
 	parse_texinfo(directory["LUMP_TEXINFO"])
+	#print("texinf:",OS.get_system_time_msecs()-a)
+	#a = OS.get_system_time_msecs()
 	parse_texture(directory["LUMP_TEXTURES"])
+	#print("texture:",OS.get_system_time_msecs()-a)
+	#a = OS.get_system_time_msecs()
 	parse_vertices(directory["LUMP_VERTICES"])
+	#print("vertices:",OS.get_system_time_msecs()-a)
+	#a = OS.get_system_time_msecs()
 	parse_planes(directory["LUMP_PLANES"])
+	#print("planes:",OS.get_system_time_msecs()-a)
+	#a = OS.get_system_time_msecs()
 	parse_edges(directory[ "LUMP_EDGES"])
+	#print("edges:",OS.get_system_time_msecs()-a)
+	#a = OS.get_system_time_msecs()
 	parse_surfedges(directory["LUMP_SURFEDGES"])
+	#print("surfedges:",OS.get_system_time_msecs()-a)
+	#a = OS.get_system_time_msecs()
+	parseLightmap(directory["LUMP_LIGHTING"])
+	#print("lightmap:",OS.get_system_time_msecs()-a)
+	#a = OS.get_system_time_msecs()
 	parse_faces(directory["LUMP_FACES"])
+	#print("faces:",OS.get_system_time_msecs()-a)
+	#a = OS.get_system_time_msecs()
 	parse_models(directory["LUMP_MODELS"])
+	#print("models:",OS.get_system_time_msecs()-a)
+	#a = OS.get_system_time_msecs()
 	parse_entites(directory["LUMP_ENTITES"])
+	#print("entities:",OS.get_system_time_msecs()-a)
 	
-	
+	#lightMapToImage()
+	readMaterialSounds()
+	#print("parse time:",OS.get_system_time_msecs()-a)
 	return true
+	
 
 	
 func parse_entites(lumpDict):
@@ -234,22 +215,26 @@ func parse_entites(lumpDict):
 		var curEntDict = {}
 		var allLines = t.split("\n",false)
 		for line in allLines:
-			#var temp = line.substr(1,-1)
-			var temp = line
-			var firstQoutePos = temp.find("\"")
-			var secondQoutePos = temp.find("\"",firstQoutePos+1)
-			var thirdQoutePos = temp.find("\"",secondQoutePos+1)
-			var fourthQoutePos = temp.find("\"",thirdQoutePos+1)
+			#var temp = line
+			var temp2 = line.split("\"",false)
+			#var firstQoutePos = temp.find("\"")
+			#var secondQoutePos = temp.find("\"",firstQoutePos+1)
+			#var thirdQoutePos = temp.find("\"",secondQoutePos+1)
+			#var fourthQoutePos = temp.find("\"",thirdQoutePos+1)
 		
-			var identifier = temp.substr(firstQoutePos+1,secondQoutePos-1)
-			var value = temp.substr(thirdQoutePos+1)
+			#var identifier = temp.substr(firstQoutePos+1,secondQoutePos-1)
+			#var value = temp.substr(thirdQoutePos+1)
+			var identifier = temp2[0]
+			var value = temp2[2]
 			curEntDict[identifier] = value.trim_suffix("\"")
 		entDictData.append(curEntDict)
 	
 
-	
 	for i in entDictData:
-		entityDataParser.parseEntityData(i,wadDict)
+		if i.has("WAD"):
+			entityDataParser.allWADparse(i,wadDict)
+		else:
+			entityDataArr.append(i)
 	
 	entities = entDictData
 	
@@ -258,13 +243,11 @@ func parse_entites(lumpDict):
 func parse_vertices(lumpDict):
 	file.seek(lumpDict["offset"])
 	var size = lumpDict["length"]
-	var verticeArray = []
+	
 	for i in size/(4*3):
 		var vec = file.get_Vector32()
-		verticeArray.append(Vector3(-vec.x,vec.z,vec.y)*scaleFactor)
+		vertices.append(Vector3(-vec.x,vec.z,vec.y)*scaleFactor)
 	
-	#lumpDict["verticeArray"] = verticeArray
-	vertices = verticeArray
 
 
 func parse_planes(planeDict):
@@ -290,7 +273,6 @@ func parse_edges(edgeDict):
 		var b = file.get_16()
 		edgeArray.append([a,b])
 	
-	#edgeDict["array"] = edgeArray
 	edges = edgeArray
 		
 func parse_surfedges(surfedgeDict):
@@ -301,76 +283,89 @@ func parse_surfedges(surfedgeDict):
 	for i in (size/4):
 		surfedgeArray.append(file.get_32())
 		
-	#surfedgeDict["array"] = surfedgeArray
 	surfaces =  surfedgeArray
 	
 
 func parse_faces(facesDict):
 	file.seek(facesDict["offset"])
 	var size = facesDict["length"]
-	var facesArray = []
 	var index = 0
 	for i in size/(12+4+4):
 		var dict = {}
-		dict["planeIndex"] = file.get_16()
-		dict["planeSide"] = file.get_16()
-		dict["firstEdgeIndex"] = file.get_32()
-		dict["nEdges"] = file.get_16()
-
-		dict["textureInfo"] = file.get_16()
+		var planeIndex  = file.get_16()
+		var planeSide = file.get_16()
+		var fistEdgeIndex = file.get_32()
+		var numFaceEdges  = file.get_16()
+		var faceTetxureInfoIdx = file.get_16()
+		var faceEdges = []
+		
 		var nStyles1 = file.get_8()
 		var nStyles2 = file.get_8()
 		var nStyles3 = file.get_8()
 		var nStyles4 = file.get_8()
-		dict["nStyles"] = [nStyles1,nStyles2,nStyles3,nStyles4]
+		var faceverts = []
+		#dict["nStyles"] = [nStyles1,nStyles2,nStyles3,nStyles4]
 		
-		dict["lightmapOffset"] = file.get_32()
-		dict["edges"] = []
-		for j in range(dict["firstEdgeIndex"],dict["firstEdgeIndex"]+dict["nEdges"]):
-			dict["edges"].append(j)
+		var lightmapOffset = file.get_32()
+		var surfEdges = []
+		for j in range(fistEdgeIndex,fistEdgeIndex+numFaceEdges):
+			surfEdges.append(j)
 		
 		var edge
-		dict["actualEdges"] = []
-		dict["verts"] = []
-		dict["origFaces"] = [index]
-
-		for e in dict["edges"]:
+		
+		#dict["origFaces"] = [index]
+		
+		for e in surfEdges:
 			if surfaces[e] >= 0:
 				edge = edges[surfaces[e]]
-				dict["verts"].append(vertices[edge[0]])
-				#faceVerts.append(vertices[edge[0]])
+				faceverts.append(vertices[edge[0]])
+				
 				
 				if !edgeToFaceIndexMap.has(edge):
 					edgeToFaceIndexMap[edge] = []
 				edgeToFaceIndexMap[edge].append(index)
-				dict["actualEdges"].append(edge)
+				faceEdges.append(edge)
 			else:
 				edge = edges[-surfaces[e]]
-				dict["verts"].append(vertices[edge[1]])
-				#faceVerts.append(vertices[edge[1]])
+				faceverts.append(vertices[edge[1]])
+				
 				
 				if !edgeToFaceIndexMap.has(edge):
 					edgeToFaceIndexMap[edge] = []
 				edgeToFaceIndexMap[edge].append(index)
-				dict["actualEdges"].append(edge)
-		index += 1
-		
-		var texInfo = textureInfo[dict["textureInfo"]]
+				faceEdges.append(edge)
+
+		var texInfo = textureInfo[faceTetxureInfoIdx]
 		var textureI = textures[texInfo["textureIndex"]]
 		var textureName = textureI["name"]
-		dict["textureName"] = textureName
+		
 		if !textureToFacesDict.has(textureName):
 			textureToFacesDict[textureName] = [index]
 		else:
 			textureToFacesDict[textureName].append(index)
-		facesArray.append(dict)
 		
+		var norm = planes[planeIndex]["normal"]
+		if planeSide == 1: norm = -norm
+		norm = norm.snapped(Vector3(0.0001,0.0001,0.0001))
+		var lightmapUV = []
+		var uvs = []
+		for v in faceverts:
+			uvs.append(texProject(v,texInfo))
+			lightmapUV.append(texProject(v,texInfo))
+			
+			
 		
+		var lImage = lightmapFunc(uvs,lightmapOffset,lightmapUV)
+		var lightmapPos = get_node("lightmapAtlas").addToAtlas2(lImage,index)
+		var uvOffset = Vector2(texInfo["fSShift"],texInfo["fTShift"])
+		var f = {}
+		f[textureName] = {}
+		f[textureName] = [{"verts":faceverts,"normal":norm,"texInfo":texInfo,"uv":uvs,"uvOffset":uvOffset,"lightmapUV":lightmapUV,"localLightmap":lImage,"faceIndex":index}]
 		
+		renderables.append(f)
+		renderableEdges.append(faceEdges)
+		index += 1
 		
-	
-	faces = facesArray
-	
 
 func parse_texinfo(texinfoDict):
 	file.seek(texinfoDict["offset"])
@@ -410,6 +405,10 @@ func parse_texture(textureDict):
 		textureOffsets.append(file.get_32u()+textureDict["offset"])
 		
 	for i in textureOffsets:
+		if i > file.get_len():#simple error check to prevent crash
+			textures.append({})
+			continue
+			
 		file.seek(i)
 		var cur = {}
 		var fName  = file.get_String(16)
@@ -423,7 +422,6 @@ func parse_texture(textureDict):
 		var mip4 =  file.get_32u()
 		
 		if mip1 == 0:
-			#textureDict["images"].append({"dim":[w,h],"name":fName})
 			textures.append({"dim":[w,h],"name":fName,"external":true})
 			continue
 		
@@ -468,8 +466,7 @@ func parse_models(modelDict):
 		var numVisLeafs = file.get_32()
 		var firstFaceIndex = file.get_32()
 		var numFaces = file.get_32()
-		#if(i == 0):
-		#	continue
+
 		BBmin = Vector3(-BBmin.x,BBmin.z,BBmin.y)*scaleFactor
 		BBmax = Vector3(-BBmax.x,BBmax.z,BBmax.y)*scaleFactor
 		origin = Vector3(-origin.x,origin.z,origin.y)*scaleFactor
@@ -478,14 +475,26 @@ func parse_models(modelDict):
 		for f in numFaces:
 			faceArr.append(f+firstFaceIndex)
 			if !hotFaces.has(f+firstFaceIndex) and i!=0:
-				#hotFaces[f+firstFaceIndex] = 1
 				hotFaces.append(f+firstFaceIndex)
 		
 		
 		
 		brushModels.append({"faceArr":faceArr,"BBMin":BBmin,"BBMax":BBmax,"origin": origin,"BBabs":BBabs})
 		
-
+func parseLightmap(lightMapDict):
+	
+	ligthMapOffset = lightMapDict["offset"]
+	file.seek(lightMapDict["offset"])
+	var size = lightMapDict["length"]
+	
+	#for i in (size/3):
+	#	var r = file.get_8()/255.0
+	#	var g = file.get_8()/255.0
+	#	var b = file.get_8()/255.0
+	#	lightMap.append(Color(r,g,b))
+	
+	#file.seek(lightMapDict["offset"])
+	rawLightmap = file.get_buffer(size)
 
 func fetchTexture(textureName,isDecal = false):
 	
@@ -510,6 +519,8 @@ func fetchTexture(textureName,isDecal = false):
 				var texture = imageBuilder.createImage(null,isDecal,i)
 				textureCache[textureName] = texture
 				return texture
+				
+	
 	print("texture not found:",textureName)
 #	breakpoint
  
@@ -520,6 +531,11 @@ func loadSound(fileName):
 	dir = dir + "/sound/" + fileName
 		
 	var stream = get_node("waveLoader").getStreamFromWAV(dir)
+	if stream.data.size() == 0:
+		if hlPath != null:
+			stream =  get_node("waveLoader").getStreamFromWAV(dir.replace("cstrike","valve"))
+			if stream.data.size() == 0:
+				print("couldn't find sound file:",fileName)
 	return stream
 		
 func createAudioPlayer3DfromName(fileName):
@@ -569,27 +585,187 @@ func readMaterialSounds():
 		var matType = line[0]
 		var textureName = line[1]
 		textureToMaterialDict[textureName] = matType
+	#	if textures.has(textureName):
+		#	breakpoint
 
-func cubeMapToPanorama():
+func lightMapToImage():
+	return
+	var img : Image = Image.new()
 	
-	var top = load("res://text/morningup.bmp")
-	var bottom = "res://text/morningdn.bmp"
-	var front = "res://text/morningft.bmp"
-	var back = "res://text/morningbk.bmp"
-	var left = "res://text/morninglf.bmp"
-	var right = "res://text/morningrt.bmp"
-	var tex = ImageTexture.new()
+	var size = (directory["LUMP_LIGHTING"]["length"]/4)
+	print(size)
+	var w = sqrt(size)
+	var h = w
 	
-	var file = File.new()
+	img.create(w,h,false,Image.FORMAT_RGBF)
+	img.lock()
 	
-	var buffer = file.get_buffer(file.get_len())
-	var image = Image.new()
-	
-	image.load_tga_from_buffer(buffer)
-	#print(image.get_data().size())
-	#var topTexture = top.create_from_image(top)
+	var count = 0
+	for y in h:
+		for x in w:
+			img.set_pixel(x,y,lightMap[count])
+			count+=1
+	img.create_from_data(w,h,false,Image.FORMAT_RGBF,lightMap)
+	#img.save_png("lightmatTest.png")
 
-	tex.create_from_image(image)
-	$"../Sprite".texture = tex
+func createSubNodes(arr):
+	for i in arr:
+		var node = Spatial.new()
+		node.name = i
+		add_child(node)
+
+func deleteSubNodes(arr):
+	for i in arr:
+		if get_node(i)!= null:
+			remove_child(get_node(i))
+
+func clearAllData():
+	vertices.clear()
+	planes.clear()
+	edges.clear()
+	surfaces.clear()
+	textureInfo.clear()
+	textureCache = {}
+	textures.clear()
+	entities.clear()
+	brushModels.clear()
+	postFuncBrushes.clear()
+	postPostFuncBrushes.clear()
+	edgeToFaceIndexMap = {}
+	faceMeshNodes = {}
+	firstTick = true
+	playerSpawnSet = false
+	hotFaces.clear()
+	renderModeFaces.clear()
+	renderFaces.clear()
+	lightMap.clear()
+	renderables.clear()
+	renderableEdges.clear()
+
+
+func texProject(vert,texInfo):
+
+	var vs = texInfo["vS"]
+	var fShift = texInfo["fSShift"]
+	var vt = texInfo["vT"]
+	var tShift = texInfo["fTShift"]
+
+	#var u = vert.dot(vs)#*scaleFactor
+	#var v = vert.dot(vt)#*scaleFactor
+	
+#	u += fShift
+#	v += tShift
+	
+	var u= vert.dot(vs)/scaleFactor
+	var v= vert.dot(vt)/scaleFactor
+	u += fShift
+	v += tShift
+	
+	
+	return Vector2(u,v)
+
+
+func texProject2(vert,texInfo):
+
+	var vs = texInfo["vS"]
+	var fShift = texInfo["fSShift"]
+	var vt = texInfo["vT"]
+	var tShift = texInfo["fTShift"]
+
+	var u = vert.dot(vs)#*scaleFactor
+	var v = vert.dot(vt)#*scaleFactor
+	
+	u += fShift
+	v += tShift
+	
+	#var u= vert.dot(vs)/scaleFactor
+	#var v= vert.dot(vt)/scaleFactor
+	#u += fShift
+	#v += tShift
+	
+	
+	return Vector2(u,v)
+
+func lightmapFunc(vertsUV,ligthmapDataOffset,lightmapuv):
+	
+	var mins = Vector2(INF,INF)
+	var maxs = Vector2(-INF,-INF)
+	
+	
+	for i in vertsUV:
+		if i.x < mins.x : mins.x = i.x
+		if i.y < mins.y : mins.y = i.y
+		
+		if i.x > maxs.x : maxs.x = i.x
+		if i.y > maxs.y : maxs.y = i.y
+	
+	var uvDim = maxs - mins
+	
+	var maxs16 = (maxs/16).ceil()
+	var mins16 = (mins/16).floor()
+	
 
 	
+	
+	
+	var lightMapDim = (maxs16 - mins16)+Vector2(1,1)
+
+	var texturel = createLightMapTexture(lightMapDim,ligthmapDataOffset)
+	
+	
+	
+	#lightmapuv.resize(vertsUV.size())
+	for i in vertsUV.size():
+		lightmapuv[i] = (vertsUV[i] - mins)/ uvDim
+		#lightmapuv[i] -= lightmapuv[i]*0.001
+	
+	
+	return texturel
+
+
+func createLightMapTexture(dim,offset):
+
+	var w = dim.x 
+	var h = dim.y
+	#var rawLightmap = rawLightmap
+	
+	var image : Image = Image.new()
+	image.create(dim.x,dim.y,false,Image.FORMAT_RGB8)
+	var fmt = image.get_format()
+	image.lock()
+	var i = 0
+	
+	for y in h:
+		for x in w:
+			var index = (x+(y*w))*3
+			var r = rawLightmap[offset + index]
+			var g = rawLightmap[offset + index + 1]
+			var b = rawLightmap[offset + index + 2]
+			var color = Color8(r,g,b)
+			
+			image.set_pixel(x,y,color)
+
+	image.unlock()
+	#var rect = Rect2(Vector2(0.5,0.5),image.get_size()-Vector2(0.5,0.5))
+	#image = image.get_rect(rect)
+	
+	#var texture = ImageTexture.new()
+	#texture.create_from_image(image)
+	#texture.flags -= texture.FLAG_FILTER
+	
+	return image
+
+
+func changeLevel(mapname):
+	clearAllData()
+	breakpoint
+
+func getSpawn():
+	if get_node_or_null("spawns"):
+		var s = get_node("spawns").get_children()
+		if s.size() > 0:
+			return {"pos":s[0].global_transform.origin,"rot":s[0].rotation_degrees.y}
+		else:
+			return {"pos":s[0].global_transform.origin,"rot":s[0].rotation_degrees.y}
+	else:
+		return null

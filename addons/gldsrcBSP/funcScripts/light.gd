@@ -1,4 +1,8 @@
 extends Light
 
-func activate():
+func setState(state):
+	visible = state
+	
+
+func toggle():
 	visible = !visible

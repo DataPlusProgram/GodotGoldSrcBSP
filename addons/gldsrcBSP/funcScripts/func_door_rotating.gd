@@ -4,12 +4,6 @@ extends Spatial
 var active = false
 var targetNodes = []
 var scaleFactor 
-var BBMax : Vector3
-var BBMin  : Vector3
-var dimX
-var dimY
-var dimZ
-var dim
 var inc = Vector3.ZERO
 var lip = 0
 var rot = Vector3(0,0,0)
@@ -24,7 +18,6 @@ var axis = Vector3.ZERO
 var moveSound
 func _ready():
 	
-	dim = get_meta("dim")#Vector3(dimX,dimY,dimZ)
 	origin = get_meta("origin")
 	scaleFactor = get_meta("scaleFactor")
 	rotAmount = deg2rad(get_meta("rotAmount"))
@@ -68,8 +61,6 @@ func _ready():
 
 func _physics_process(delta):
 	
-	
-	
 	collisions()
 	if !active:
 		return
@@ -101,7 +92,7 @@ func _physics_process(delta):
 			get_node("interactionBox").rotation_degrees.z += 0.001 * rotDir
 	
 		get_node("interactionBox").translation = origin
-		#print(rotInc)
+
 
 
 	
@@ -111,7 +102,7 @@ func collisions():
 		if c.get_class() == "StaticBody":
 			if !targetNodes.find(c.get_parent()):
 				pass
-				#print(c.name)
+
 		
 		if c.is_in_group("hlTrigger"):
 			active = true
@@ -119,8 +110,10 @@ func collisions():
 				moveSound.play()
 
 
-	
-func activate():
+func setState(state):
+	toggle()
+
+func toggle():
 	if active == false:#and locked == false:
 		if moveSound:
 			moveSound.play()

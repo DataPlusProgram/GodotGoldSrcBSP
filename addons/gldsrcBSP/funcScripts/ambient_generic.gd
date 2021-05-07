@@ -1,5 +1,5 @@
 extends AudioStreamPlayer3D
 
-func activate():
+func toggle():
 	if !playing:
 		play()

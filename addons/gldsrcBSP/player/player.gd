@@ -1,6 +1,6 @@
 extends KinematicBody
 
-var speed = 15
+export var speed = 15
 var mouseSensitivity = 0.05
 var direction = Vector3()
 var accHor = Vector3()
@@ -9,9 +9,11 @@ var dead = false
 export var gravity = 1
 export(NodePath) var bspNodePath = null
 var jumpSpeed = 0.5
+
 var initalGravity = gravity
 var gravityVelo = Vector3()
 var onGround = false
+var jumpSound = false
 onready var colShape = $"CollisionShape"
 onready var camera = $"Camera"
 onready var footCast = $"footCast"
@@ -34,14 +36,14 @@ var footStepDict = {
 	"P":["debris/glass1.wav","debris/glass2.wav","debris/glass3.wav"],
 	"Y":["debris/glass1.wav","debris/glass2.wav","debris/glass3.wav"],
 	"F":["weapons/bullet_hit1.wav","weapons/bullet_hit1.wav","weapons/bullet_hit1.wav"]
-
+	
 
 }
 
 var cachedSounds = {}
 
 func _ready():
-	
+	var err = bspNode.connect("playerSpawnSignal",self,"setSpawn")
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 
@@ -77,6 +79,11 @@ func _physics_process(delta):
 	
 	if Input.is_action_just_pressed("ui_accept") and onGround:
 		gravityVelo = Vector3.UP * jumpSpeed
+		var mat = getFootMaterial()
+		if mat!=null:
+			playMatStepSound(mat)
+		
+		
 	
 	if Input.is_action_pressed("ui_up"):
 		direction -= transform.basis.z
@@ -111,9 +118,11 @@ func _physics_process(delta):
 			collision.collider.apply_central_impulse(-collision.normal * 1)
 	
 	
-func setSpawn(pos,rot):
-	translation = pos
-	#rotation_degrees = rot + Vector3(0,90,0)
+func setSpawn(dict):
+	#print(dict)
+	translation = dict["pos"]
+	rotation_degrees.y = dict["rot"]+90
+
 	
 	
 func enterLadder():
@@ -134,38 +143,62 @@ func die():
 	return
 
 func footsteps():
-	#if translation.distance_to(lastStep) 
-	if direction.length() < 0.1:
+	
+	if direction.length() < 0.1 and jumpSound == false:
 		return
+		
 	var collider = footCast.get_collider()
 	if collider == null:
 		return
+	
+	var matType = getFootMaterial()
+	
+	if matType == null:
+		return
+	
+	
+	
+	if footStepDict.has(matType):
+		if translation.distance_to(lastStep) < 2 and lastMat == matType:  
+			lastMat = matType
+			return
 		
+		lastMat = matType
+		lastStep = translation
+		
+		playMatStepSound(matType)
+
+
+func getFootMaterial():
+	var collider = footCast.get_collider()
+	if collider == null:
+		return null
+	
 	if collider.has_meta("materialType"):
 		var matType = collider.get_meta("materialType")
-		if footStepDict.has(matType):
-			var randomIndex = randi()%footStepDict[matType].size()
+		return matType
+	else:
+		return null
+		
+func playMatStepSound(mat):
+	if footStepDict.has(mat):
+		var randomIndex = randi()%footStepDict[mat].size()
+		
+		var soundFilePath = footStepDict[mat][randomIndex]
+		var stream = null
+		if !cachedSounds.has(soundFilePath):
+			cachedSounds[soundFilePath] = bspNode.loadSound(soundFilePath)
 			
-			var soundFilePath = footStepDict[matType][0]
-			var stream = null
-			
-			if translation.distance_to(lastStep) < 2 and lastMat == matType:  
-				lastMat = matType
-				return
-			lastMat = matType
-			lastStep = translation
-			
-			if !cachedSounds.has(soundFilePath):
-				cachedSounds[soundFilePath] = bspNode.loadSound(soundFilePath)
-			
-			stream  = cachedSounds[soundFilePath]
-			
-			if footstepSound.playing == false:
-				footstepSound.stream = stream
+		stream = cachedSounds[soundFilePath]
+		
+		if footstepSound.playing == false:
+			footstepSound.stream = stream
 				
-				footstepSound.play()
-
+			footstepSound.play()
+		
+	
 func shoot():
+	return
 	var collider = shootCast.get_collider()
 	if collider == null:
 		return
@@ -176,14 +209,15 @@ func shoot():
 		direction -= transform.basis.z
 		var ap = AudioStreamPlayer.new()
 		ap.stream = bspNode.loadSound("weapons/pl_gun3.wav")
+		ap.volume_db*= 0.005
 		add_child(ap)
 		ap.play()
 		
 		if collider.has_meta("breakable"):
 			var breakNode = collider.get_meta("breakable")
 			breakNode.takeDamage()
-		#if collider.has_method("takeDamage"):
-		#	collider.takeDamage
+		if collider.has_method("takeDamage"):
+			collider.takeDamage
 		
 func cameraStuff():
 	var ninety  = deg2rad(90)

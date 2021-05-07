@@ -6,9 +6,10 @@ var targetGroups
 func _ready():
 	targetGroups = get_meta("targetGroups")
 	
+func setState(state):
+	toggle()
 
-
-func activate():
+func toggle():
 	for group in targetGroups:
 		for i in get_tree().get_nodes_in_group(group["name"]):
 			if i!=self and i.get_class() != "Node":

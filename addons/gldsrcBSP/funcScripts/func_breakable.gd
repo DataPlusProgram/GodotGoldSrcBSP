@@ -19,6 +19,7 @@ var matSound ={
 }
 
 func _ready():
+	return
 	targetNodes = get_meta("targetNodes")
 	
 	
@@ -37,17 +38,22 @@ func _ready():
 	add_child(breakSound)
 	
 func takeDamage():
-	activate()
+	toggle()
 
-func activate():
+func setStage(state):
+	toggle()
+
+func toggle():
 	if unbreakable == true:
 		return
 	if targetNodes!= null:
 		if breakSound!= null:
 			breakSound.play()
 	
-		targetNodes.queue_free()
+	if targetNodes != null:
+		if typeof(targetNodes) != TYPE_ARRAY:
+			targetNodes.queue_free()
 		
 	if targetName != null:
 			for i in get_tree().get_nodes_in_group(targetName):
-				i.activate()
+				i.toggle()

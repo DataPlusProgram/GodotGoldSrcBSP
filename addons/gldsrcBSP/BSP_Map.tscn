@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=2]
+[gd_scene load_steps=9 format=2]
 
 [ext_resource path="res://addons/gldsrcBSP/src/BSP_Map.gd" type="Script" id=1]
 [ext_resource path="res://addons/gldsrcBSP/src/entityDataParser.gd" type="Script" id=2]
@@ -7,12 +7,15 @@
 [ext_resource path="res://addons/gldsrcBSP/src/imageBuilder.gd" type="Script" id=5]
 [ext_resource path="res://addons/gldsrcBSP/src/bmpLoader.gd" type="Script" id=6]
 [ext_resource path="res://addons/gldsrcBSP/src/mdlLoad.gd" type="Script" id=7]
+[ext_resource path="res://addons/gldsrcBSP/lightmapAtlas.gd" type="Script" id=8]
 
 [node name="BSP_Map" type="Spatial"]
+transform = Transform( 0.05, 0, 0, 0, 0.05, 0, 0, 0, 0.05, 0, 0, 0 )
 script = ExtResource( 1 )
 __meta__ = {
 "done": true
 }
+scaleFactor = 1.0
 textureFiltering = true
 
 [node name="levelBuilder" type="Spatial" parent="."]
@@ -47,6 +50,12 @@ __meta__ = {
 
 [node name="mdlLoader" type="Node" parent="."]
 script = ExtResource( 7 )
+__meta__ = {
+"hidden": true
+}
+
+[node name="lightmapAtlas" type="Node" parent="."]
+script = ExtResource( 8 )
 __meta__ = {
 "hidden": true
 }

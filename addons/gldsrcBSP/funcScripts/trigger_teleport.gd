@@ -9,6 +9,8 @@ func _ready():
 		oneshot = true
 		
 	
+	
+
 
 func _physics_process(delta):
 	for i in get_overlapping_bodies():

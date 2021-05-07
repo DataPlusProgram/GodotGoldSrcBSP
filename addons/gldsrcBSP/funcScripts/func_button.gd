@@ -22,24 +22,24 @@ func _physics_process(delta):
 			if sound != null:
 				sound.play()
 			if targetName != null:
-				activate()
-			
+				toggle()
+		
 			if timer == null:
 				timer = Timer.new()
 				timer.wait_time = 1.5
 				timer.connect("timeout", self, "coolDownOver")
 				add_child(timer)
 				timer.start()
-			else:
-				print(timer)
-	
-func activate():
+
+func setState(state):
+	toggle()
+
+func toggle():
 	
 	for i in get_tree().get_nodes_in_group(targetName):
-		print(i.name)
 		if "locked" in i:
 			i.locked = false
-		i.activate()
+		i.toggle()
 
 func coolDownOver():
 	cooldown = false

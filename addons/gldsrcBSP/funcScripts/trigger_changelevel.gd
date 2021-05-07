@@ -4,7 +4,7 @@ extends Area
 var mapName
 
 func _ready():
-	mapName = get_meta("mapName")
+	mapName = get_meta("mapName").to_lower()
 
 
 func _process(delta):

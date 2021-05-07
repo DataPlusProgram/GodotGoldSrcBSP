@@ -1,21 +1,16 @@
 tool
 extends Node
 
-
-
 var file
 var fileDict = {}
 
-
 func _ready():
 	set_meta("hidden",true)
-
+	
 
 func getStreamFromWAV(path):
 	file = load("res://addons/gldsrcBSP/DFile.gd").new()
-	
 	if !file.loadFile(path):
-		print("audio file not found:" + path)
 		return AudioStreamSample.new()
 		
 	fileDict["magic"] = file.get_String(4)
@@ -26,19 +21,25 @@ func getStreamFromWAV(path):
 	file.seek(fileDict["dataChunkOffset"])
 	parseData()
 	var stream = createStream()
-	var pos = file.get_position()
-	var chunkId = file.get_String(4)
 	
 	
-	if chunkId == "LIST":
-		parseList()
+	if file.eof_reached():
+		return stream
 	
 	var cueArr = []
-	if !file.eof_reached():
-		chunkId = file.get_String(4)
+	
+	while !file.eof_reached():
+		var pos = file.get_position()
+		if (pos + 4) >= file.get_len():	
+			break
+			
+		var chunkId = file.get_String(4)
+		if chunkId == "LIST":
+			parseList()
 		
 		if chunkId == "CUE ":
 			cueArr = parseCue()
+			break
 	
 	stream.loop_end = stream.data.size()
 	
@@ -46,14 +47,11 @@ func getStreamFromWAV(path):
 		stream.loop_mode = AudioStreamSample.LOOP_FORWARD
 		stream.loop_begin = cueArr[0]
 		
-	
 	if cueArr.size()>1:
 		stream.loop_end = cueArr[1]
 	
 	return stream
 	
-
-
 
 func parseFmt():
 	fileDict["fmtId"] = file.get_32()
@@ -81,12 +79,21 @@ func createStream():
 	
 	var dataSize = fileDict["dataSize"]
 	var data = []
+	var size = fileDict["bitsPerSample"]/8
 	
-	for i in range(0,dataSize):
-		data.append((file.get_8()-128)/2.0)
+	if fileDict["bitsPerSample"] == 8:
+		for i in range(0,dataSize):
+			data.append((file.get_8() -128)/2.0)
+
+	if fileDict["bitsPerSample"] == 16:
+		for i in range(0,dataSize):
+			data.append(file.get_8())
 
 	if !file.eof_reached():
-		file.get_8()#all files that had another chunk after the data chunk had a single byte of padding
+		while(file.get_position())%4 != 0:
+			file.get_8()#all files that had another chunk after the data chunk had a single byte of padding
+			if file.eof_reached():
+				break
 	stream.data = data
 	return stream
 
@@ -97,7 +104,7 @@ func parseList():
 	var endPos = file.get_position() + listDict["dataSize"]
 	listDict["chunkType"] = file.get_String(4)
 	file.seek(endPos)
-
+	
 func parseCue():
 	var curDict = {}
 	var cueOffsets = []
@@ -111,6 +118,6 @@ func parseCue():
 		curDict["chunkStart"] = file.get_32()
 		curDict["blockStart"] = file.get_32()
 		curDict["sampleOffset"] =file.get_32()
-		cueOffsets.append(curDict["position"]/8)
+		cueOffsets.append(curDict["position"])
 	return cueOffsets
 	

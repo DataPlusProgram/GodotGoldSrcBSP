@@ -28,16 +28,24 @@ func _ready():
 
 	
 	for i in targetNodesPath:
+
 		var gp= get_parent().get_parent()
-		targetNodes.append(gp.get_node("Geometry").get_node(i))
+		var node = gp.get_node("Geometry").get_node(i)
+		node.collision_layer = 0
+		node.collision_mask = 0
+		targetNodes.append(node)
+		
 
 
 func _physics_process(delta):
 	
 	if !active:
 		return
-	
+
 	for i in targetNodes:
+		if i == null:
+			continue
+		
 		if axis.x == 1:
 			i.rotation_degrees.x += 2
 		if axis.y == 1:

@@ -59,7 +59,8 @@ func _physics_process(delta):
 			i.rotation_degrees.z += axis.z*2
 
 	
-
+func toggle(state):
+	activate()
 
 func activate():
 	

@@ -1,7 +1,7 @@
 tool
 extends Spatial
 
-var faces
+#var faces = []
 var edges
 var surfEdges
 var vertices
@@ -11,48 +11,81 @@ var textureInfos
 var brushModels
 var geometryParentNode = null
 var edgeToFaceIndexMap
+var renderables
+var renderableEdges
 #var workingFaceMeshNodes = {}
 var linkedFacesDict = {}
 var theFaceIndex = 0
 var hotFaces
 var renderModeFaces
 var skyMat = null
+var lightmapOffset = null
 var cubeMapShader = preload("res://addons/gldsrcBSP/cubemap.shader")
 var skyCubemap = null
-var kinematicBodies = true
-
+var atlasTexture : ImageTexture
+var atlasDim 
+var kinematicBodies = false
 var rads = {
 	"+0~GENERIC65": Color(1,1,1),
 	"+0~GENERIC85":Color(1,1,1),
+	"+0~GENERIC86":Color(1,1,1),
+	"+0~GENERIC86B":Color(1,1,1),
+	"+0~GENERIC86R":Color(1,1,1),
+	"GENERIC87A":Color(1,1,1),
+	"GENERIC88A":Color(1,1,1),
+	"GENERIC89A":Color(1,1,1),
+	"GENERIC90A":Color(1,1,1),
+	"GENERIC105":Color(1,1,1),
+	"GENERIC106":Color(1,1,1),
+	"GENERIC107":Color(1,1,1),
+	"GEN_VEND1":Color(1,1,1),
+	"EMERGLIGHT":Color(1,1,1),
 	"~+0LAB1_W6D" : Color(1,1,1),
 	"~+0LAB1_W6" : Color(1,1,1),
 	"~+0LAB1_W7":Color(1,1,1),
+	"SKKYLITE":Color(1,1,1),
 	"~LIGHT2A" : Color(1,1,1),
 	"~LIGHT3B" : Color(1,1,1),
 	"~LIGHT3C" : Color(1,1,1),
 	"~LIGHT5A" : Color(1,1,1),
 	"~LIGHT5F" : Color(1,1,1),
+	"+0~TNNL_LGT1" : Color(1,1,1),
+	"+0~TNNL_LGT2" : Color(1,1,1),
+	"+0~TNNL_LGT3" : Color(1,1,1),
+	"+0~TNNL_LGT4" : Color(1,1,1),
+	"~EMERGLIGHT":Color(1,1,1),
 	"+0~FIFTS_LGHT01": Color(1,1,1),
 	"+0~FIFTIES_LGT2": Color(1,1,1),
-	#"+0~FIFTS_LGHT4": Color(1,1,1),
-	"~EMERGLIGHT":Color(1,1,1),
+	"+0~FIFTS_LGHT4": Color(1,1,1),
+	"+0~DRKMTLS1" : Color(1,1,1),
+	"0~DRKMTLGT1" : Color(1,1,1),
+	"+0~DRKMTLS2" : Color(1,1,1),
+	"+0~DRKMTLS2C" : Color(1,1,1),
+	"+0DRKMTL_SCRN" : Color(1,1,1),
 	"+0~LAB_CRT8":Color(1,1,1),
-
+	"RED":Color(1,0,0),
+	"YELLOW":Color(1,1,0),
+	"~SPOTYELLOW":Color(1,1,1),
+	"+0~LIGHT2A":Color(1,1,1),
+	"+A~FIFTS_LGHT4":Color(1,1,1)
+	
 	}
 
 
 
 func _ready():
 	set_meta("hidden",true)
+	
 	#mat.set_shader_param("cube_map",skyCubemap)
 
 func createLevel(dict,wadDict):
+
 	renderModeFaces = get_parent().renderModeFaces
 	geometryParentNode = Spatial.new()
 	geometryParentNode.name = "Geometry"
 	get_parent().add_child(geometryParentNode)
 	vertices = get_parent().vertices
-	faces = get_parent().faces
+	#faces = get_parent().faces
 	surfEdges = get_parent().surfaces
 	edges = get_parent().edges
 	planes = get_parent().planes
@@ -61,71 +94,58 @@ func createLevel(dict,wadDict):
 	brushModels = get_parent().brushModels
 	hotFaces = get_parent().hotFaces
 	edgeToFaceIndexMap = get_parent().edgeToFaceIndexMap
-
-	textureLights2()
+	lightmapOffset = get_parent().ligthMapOffset
+	#atlasTexture = get_parent().get_node("lightmapAtlas").getTexture()
+	var a = OS.get_system_time_msecs()
+	var atlasDict = get_parent().get_node("lightmapAtlas").initAtlas()
+	atlasDim = get_parent().get_node("lightmapAtlas").getSize()
+	atlasTexture = atlasDict["texture"]
+	var atlasRects = atlasDict["rects"]
+	
 	if get_parent().optimize == true:
-		var a = OS.get_system_time_secs()
+		#a = OS.get_system_time_msecs()
 		generateEdgeTrackerFaces()
-		mergeBrushModelFaces2()
+		#combineEdgeTracker()
+		#print("Generate edge tracker faces:", OS.get_system_time_msecs()-a)
+		mergeBrushModelFaces3()
 
-	for face in faces:
-		var faceIndex = faces.find(face)
-
-		var edge
-		var plane = planes[face["planeIndex"]]
-		var texInfo = textureInfos[face["textureInfo"]]
-		var textureI = textures[texInfo["textureIndex"]]
-		var textureName = textureI["name"]
-		faces[faceIndex]["textureName"] = textureName
-
-
-		var texture = null
-
-		if textureName == "AAATRIGGER":
-			get_parent().faceMeshNodes[faceIndex] = null
+	#a = OS.get_system_time_msecs()
+	var renderables= get_parent().renderables
+	
+	for faceIdx in renderables.size():
+		var face = renderables[faceIdx]
+		if face.empty():
 			continue
-
-
-
-		var norm = plane["normal"]
-		if face["planeSide"] == 1: norm = -norm
-		face["normal"] = norm
-
-
+		var faceIndex = faceIdx#faces.find(face)
 		var meshNode = null
+		
+		
+		var fanMesh  = createMeshFromFanArr(face,faceIndex)
+		
+		if fanMesh != null:
+			fanMesh.use_in_baked_light = true
+			get_parent().faceMeshNodes[faceIndex] = fanMesh
+			geometryParentNode.add_child(fanMesh)
+			
 
-		if !face.has("fans"):
-			if face["verts"] != []:
-				meshNode = createMeshFromFan(face["verts"],textureName,norm,faceIndex,texInfo)
-				meshNode.use_in_baked_light = true
-				get_parent().faceMeshNodes[faceIndex] =meshNode
-				geometryParentNode.add_child(meshNode)
-		else:
-			if face["fans"].size()>0:
-				#if get_parent().simpleCombine:
-				#	fanMerge(face["fans"])
-				var fanMesh  = createMeshFromFanArr(face["fans"],textureName,norm,faceIndex,texInfo)
-				if fanMesh != null:
-					fanMesh.set_meta("fans",face["fans"])
-					fanMesh.use_in_baked_light = true
-					get_parent().faceMeshNodes[faceIndex] =fanMesh
-					geometryParentNode.add_child(fanMesh)
-
-
-	#Global.createWindowDict(edgeToFaceIndexMap,200,500,"edgeToFaceIndexMap")
+	#get_parent().get_node("lightmapAtlas").saveToFile()
+	
+	a = OS.get_system_time_msecs()
 	if get_parent().collisions == true:
 		if get_parent().faceMeshNodes!= null:
 			for f in get_parent().faceMeshNodes.values():
 				if f != null:
 					createCollisionsForMesh(f)
-
 	else:
 		for f in get_parent().faceMeshNodes.values():
 			var newParent = Spatial.new()
 			newParent.add_child(f)
 			geometryParentNode.add_child(newParent)
-
-	textureLights()
+			
+	#print("collisions:",OS.get_system_time_msecs()-a)
+	if get_parent().textureLights:
+		textureLights()
+	
 
 
 func getCenter(vertices):
@@ -139,9 +159,12 @@ func getCenterFanArr(fans):
 	var center= Vector3.ZERO
 	var count = 0
 	for textureName in fans:
-		for fan in fans[textureName]:
-			center += getCenter(fan["verts"])
-			count +=1
+		for i in fans[textureName]:
+			center += getCenter(i["verts"])
+			count += 1
+		#	center += getCenter(fan["verts"])
+			
+	#		count +=1
 
 
 	return center/count
@@ -176,136 +199,16 @@ func mergeAfan(fans,fan1):
 					fan2["verts"] = []
 
 
-func createMesh(vertices,textureName,normal,faceIndex,texInfo):
-	var texture
-	var center = getCenter(vertices)
-	var fiddleScale = 1
-	var surf = SurfaceTool.new()
-	var mesh = Mesh.new()
-	if hotFaces.has(faceIndex):
-		breakpoint
-
-	var mat
-
-	if !get_parent().disableTextures:
-		texture =get_parent().fetchTexture(textureName)
-		if textureName!="SKY":
-			mat = createMat(texture,textureName)
-		else:
-			breakpoint
-
-
-	get_parent().faceIndexToMaterialMap[faceIndex] = mat
-
-
-
-	surf.begin(Mesh.PRIMITIVE_TRIANGLE_FAN)
-	if !get_parent().disableTextures:
-		surf.set_material(mat)
-
-
-	for v in vertices.size():
-		surf.add_normal(normal)
-		surf.add_vertex((vertices[v]-center)*fiddleScale)
-	surf.index()
-	surf.commit(mesh)
-
-	var meshNode = MeshInstance.new()
-	meshNode.name = "face_mesh_" + String(faceIndex)
-	#meshNode.translation = center
-	mesh.lightmap_unwrap(Transform.IDENTITY,1)
-	meshNode.mesh = mesh
-	get_parent().faceMeshNodes[faceIndex] = meshNode
-	meshNode.set_meta("vertices",surf.commit_to_arrays())
-	var matType = getMatType(textureName)
-	meshNode.set_meta("materialType",matType)
-	meshNode.set_meta("textureName",textureName)
-	meshNode.set_meta("normal",normal)
-
-	return meshNode
-
-func createMeshFromFan(vertices,textureName,normal,faceIndex,texInfo,localUV = true):
-
-	var texture
-	var center = getCenter(vertices)
-	var fiddleScale = 1
-	var surf = SurfaceTool.new()
-	var mesh = Mesh.new()
-
-	#var centerVerts = vertices.duplicate()
-
-	var mat
-
-	if !get_parent().disableTextures:
-		texture =get_parent().fetchTexture(textureName)
-
-		if textureName!="SKY":
-			mat = createMat(texture,textureName)
-		else:
-			mat = createMatSky()
-
-
-	get_parent().faceIndexToMaterialMap[faceIndex] = mat
-
-
-	surf.begin(Mesh.PRIMITIVE_TRIANGLES)
-	if !get_parent().disableTextures:
-		surf.set_material(mat)
-
-
-	var triVerts = []
-	var triNormals = []
-	var triUV = []
-	var TL = Vector2(INF,INF)
-	for v in vertices.size():
-
-
-		var projVert
-		projVert = texProject(vertices[v],texInfo,texture)
-
-		vertices[v] -= center
-		triNormals.append(normal)
-		triVerts.append(vertices[v])
-
-
-		triUV.append(projVert)
-		if projVert.x < TL.x: TL.x = projVert.x
-		if projVert.y < TL.y: TL.y = projVert.y
-
-
-	surf.add_triangle_fan(triVerts,triUV,[],triUV,triNormals)
-	#surf.add_vertex(vertices[v]*fiddleScale)
-	surf.index()
-	surf.commit(mesh)
-	mesh.lightmap_unwrap(Transform.IDENTITY,1)
-	var meshNode = MeshInstance.new()
-	meshNode.name = "face_mesh_" + String(faceIndex)
-	meshNode.translation = center
-	meshNode.mesh = mesh
-
-	get_parent().faceMeshNodes[faceIndex] = meshNode
-
-	var matType = getMatType(textureName)
-
-	meshNode.set_meta("vertices",surf.commit_to_arrays())
-	meshNode.set_meta("materialType",matType)
-	meshNode.set_meta("textureName",textureName)
-	meshNode.set_meta("normal",normal)
-	if hotFaces.has(faceIndex):
-		meshNode.set_meta("hotFace",true)
-
-	#print(surf.commit_to_arrays()[0])
-	return meshNode
 
 func getMatType(textureName):
 	var lookupString  = textureName
 	if lookupString.length() > 12:
 		lookupString = lookupString.substr(0,12)
-
+	
 	lookupString = lookupString.trim_prefix("!")
 	lookupString = lookupString.trim_prefix("~")
 	lookupString = lookupString.trim_prefix("{")
-	lookupString = lookupString.trim_prefix(" ")
+	
 
 	var matType = "C"
 	if get_parent().textureToMaterialDict.has(lookupString):
@@ -313,99 +216,118 @@ func getMatType(textureName):
 
 	return matType
 
-func createMeshFromFanArr(fans,textureName,normal,faceIndex,texInfo):
-	var center =getCenterFanArr(fans)
+#var surf : SurfaceTool = SurfaceTool.new()
+
+func createMeshFromFanArr(fans,faceIndex):
+	var center = getCenterFanArr(fans)
 	var texture
-	var fiddleScale = 1
-	var surf = SurfaceTool.new()
+	
+	var surf: SurfaceTool = SurfaceTool.new()
 	var runningMesh = ArrayMesh.new()
 
-	var matType = getMatType(textureName)
-
-
-	var mat
-
-	if !get_parent().disableTextures:
-		texture =get_parent().fetchTexture(textureName)
-		if textureName!="SKY":
-			mat = createMat(texture,textureName)
-		else:
-			mat = createMatSky()
-
-	get_parent().faceIndexToMaterialMap[faceIndex] = mat
+	var mat# : SpatialMaterial
 	surf.begin(Mesh.PRIMITIVE_TRIANGLES)
-
-
 	var count = 0
-	var hasVerts = false
-	#print("textures in fan:",fans.keys())
+	
+	var atlasPosArr = get_parent().get_node("lightmapAtlas").atlasPos
+	var atlasDimArr = get_parent().get_node("lightmapAtlas").atlasImgDimArr
+	var matType = null #currently I'm only picking a mat at random this can fail for multi-material meshes
 	for textureName in fans:
 		var localSurf = SurfaceTool.new()
-		var localMesh = ArrayMesh.new()
-		texture =get_parent().fetchTexture(textureName)
-		if !get_parent().disableTextures:
-			if textureName!="SKY":
-				mat = createMat(texture,textureName,renderModeFaces)
-			else:
-				mat = createMatSky()
+		if matType == null:
+			matType = getMatType(textureName)
+		texture = get_parent().fetchTexture(textureName)
+		
 		localSurf.set_material(mat)
 		localSurf.begin(Mesh.PRIMITIVE_TRIANGLES)
-		#print(textureName)
-		#print(mat)
-		#mesh = Mesh.new()
-		for fan in fans[textureName]:
-
-			var triVerts = fan["verts"]
-
-			if triVerts == null:
-				continue
-
-			if triVerts.size()<3:
-				continue
-
+		
+		var localLightmap
+		
+		for locFan in fans[textureName]:
+			var fIdx = locFan["faceIndex"] 
+			var triVerts = locFan["verts"]
 			var triNormals = []
-			var triUV = []
+			var triUV = locFan["uv"]
 			var vertsLocal = []
+			localLightmap =locFan["localLightmap"]
+			
 			for i in triVerts:
 				vertsLocal.append(i-center)
-				triNormals.append(fan["normal"])
-				#var proj = uvProjection(i,fan["normal"])
-				var proj = texProject(i,fan["texinfo"],texture)
-				triUV.append(proj)
+				triNormals.append(locFan["normal"])
+			
+			var lightmapUV = locFan["lightmapUV"]
+			
+			for i in triUV.size():
+				triUV[i] /= texture.get_size()
+			#	
 
+			var atlasPos = atlasPosArr[fIdx]
+			var dimInAtlas = atlasDimArr[fIdx]
+			
+			var mins = Vector2(INF,INF)
+			var maxs = Vector2(-INF,-INF)
+			var locDim = localLightmap.get_size() 
+			
+			for i in lightmapUV.size():
+				if lightmapUV[i].x < mins.x : mins.x = lightmapUV[i].x
+				if lightmapUV[i].x < mins.y : mins.y = lightmapUV[i].y
+				
+				if lightmapUV[i].x > maxs.x : maxs.x = lightmapUV[i].x
+				if lightmapUV[i].y > maxs.y : maxs.y = lightmapUV[i].y
+			#print(String(fIdx),":",lightmapUV)
+			
+			mins+=Vector2(1,1)/locDim
+			maxs-=Vector2(1,1)/locDim
+			
+			for i in lightmapUV.size():
+				lightmapUV[i].x = lerp(mins.x,maxs.x,lightmapUV[i].x)
+				lightmapUV[i].y = lerp(mins.y,maxs.y,lightmapUV[i].y)
+				
+				lightmapUV[i]*=localLightmap.get_size() #convert to pixel
+				lightmapUV[i] += atlasPosArr[fIdx]#shift over the position in the atlas
+				lightmapUV[i] /= atlasDim#convert to 
+				#lightmapUV[i] /= get_parent().scale_factor)
 
-
-			localSurf.add_triangle_fan(vertsLocal,triUV,[],triUV,triNormals)
-		#localSurf.commit(localMesh)
+			if !get_parent().disableTextures:
+				if textureName!="SKY":
+					mat = createMat(texture,textureName,renderModeFaces)
+				else:
+					mat = createMatSky()
+			
+			localSurf.add_triangle_fan(vertsLocal,triUV,[],lightmapUV,triNormals)
+			
 		localSurf.commit(runningMesh)
 
-
-
-		runningMesh.surface_set_material(count,mat)
-		runningMesh.surface_set_name(count,textureName)
+		
+		if textureName!="SKY" and mat!=null:
+			mat.albedo_texture = texture
+			if get_parent().importLightmaps:
+				mat.detail_uv_layer = SpatialMaterial.DETAIL_UV_2
+				mat.detail_enabled = true
+				mat.detail_albedo = atlasTexture
+				mat.detail_blend_mode = SpatialMaterial.BLEND_MODE_MUL
+		
+			runningMesh.surface_set_material(count,mat)
+			runningMesh.surface_set_name(count,textureName)
 		count+=1
-
-
 
 
 	surf.commit(runningMesh)
 
 	var meshNode = MeshInstance.new()
 	meshNode.name = "face_mesh_" + String(faceIndex)
-	#meshNode.translation = center
 	meshNode.mesh = runningMesh
+	
 	get_parent().faceMeshNodes[faceIndex] = meshNode
-	meshNode.set_meta("vertices",surf.commit_to_arrays())
+	
 	meshNode.translation = center
-	#print(surf.commit_to_arrays()[0])
+	
+	meshNode.set_meta("textureName",fans.keys()[0])
+	meshNode.set_meta("fans",fans)
 	meshNode.set_meta("materialType",matType)
-	meshNode.set_meta("textureName",textureName)
-	meshNode.set_meta("normal",normal)
 	if hotFaces.has(faceIndex):
 		meshNode.set_meta("hotFace",true)
 	return meshNode
-
-
 
 
 func createMat(texture,textureName,render = null):
@@ -414,8 +336,7 @@ func createMat(texture,textureName,render = null):
 	var matCacheName = textureName# + String(texInfo["fSShift"]) + String(texInfo["fTShift"])# + String(texInfo["vS"]) + String(texInfo["vT"])
 
 	var matDict = get_parent().fetchMaterial(matCacheName)
-	#var mat = SpatialMaterial.new()
-	var mat = matDict["material"]
+	var mat : SpatialMaterial = matDict["material"]
 
 
 
@@ -426,27 +347,22 @@ func createMat(texture,textureName,render = null):
 
 			if texture.get_data().detect_alpha() != 0:
 				mat.flags_transparent =true
-
+		#if rads.has(textureName):
+			
 		mat.flags_world_triplanar = true
+		mat.emission_enabled = true
+		#mat.emission_texture = 
 		#mat.uv1_triplanar = true
 		get_parent().saveToMaterialCache(matCacheName,mat)
 
 	return(mat)
-	#print(vertices)
 
 func createMatSky():
-
+	
 	if skyMat == null:
 		var path = get_parent().skyTexture
 		var bmpLoader = get_parent().get_node("bmpLoader")
 
-
-		#var left = bmpLoader.getImageFromBMP(path + "lf.bmp")
-		#var right = bmpLoader.getImageFromBMP(path + "rt.bmp")
-		#var bottom = bmpLoader.getImageFromBMP(path + "dn.bmp",true)
-		#var top = bmpLoader.getImageFromBMP(path + "up.bmp",true)
-		#var front = bmpLoader.getImageFromBMP(path + "ft.bmp")
-		#var back =  bmpLoader.getImageFromBMP(path + "bk.bmp")
 
 		var left = loadTGAasImage(path + "lf.tga")
 		var right = loadTGAasImage(path + "rt.tga")
@@ -483,19 +399,19 @@ func createMatSky():
 
 
 func createCollisionsForMesh(meshNode):
-
+	
 	#if meshNode.get_meta("textureName")[0]  == "!":
 	#	return
 
 	var center = meshNode.translation
-
 	meshNode.translation = Vector3.ZERO
 	if meshNode.get_meta("textureName")[0]  != "!":# and meshNode.has_meta("hotFace"):
 		meshNode.create_trimesh_collision()
 	else:
+		meshNode.scale = Vector3(0.99,0.99,0.99)
 		meshNode.create_convex_collision()
-	#if(meshNode.get_children()) == []:
-	#	return
+
+
 	meshNode.get_parent().remove_child(meshNode)
 	var staticBodyNode = meshNode.get_child(0)
 
@@ -512,60 +428,6 @@ func createCollisionsForMesh(meshNode):
 		staticBodyNode.queue_free()
 		staticBodyNode = Area.new()
 		staticBodyNode.add_child(shape)
-	
-	meshNode.remove_child(staticBodyNode)
-	meshNode.name = "face" + String(theFaceIndex)
-	staticBodyNode.translation = center
-	  
-	if meshNode.get_meta("textureName")[0]  == "!":
-		var scriptRes = load("res://addons/gldsrcBSP/funcScripts/water.gd")
-		staticBodyNode.set_script(scriptRes)
-	staticBodyNode.add_child(meshNode)
-	if meshNode.has_meta("materialType"):
-		staticBodyNode.set_meta("materialType", meshNode.get_meta("materialType"))
-
-	
-	
-	geometryParentNode.add_child(staticBodyNode)
-	return
-
-func createCollisionsForMesh2(meshNode):
-
-	#if meshNode.get_meta("textureName")[0]  == "!":
-	#	return
-
-	var center = meshNode.translation
-
-	meshNode.translation = Vector3.ZERO
-	if meshNode.get_meta("textureName")[0]  != "!":#not water
-		meshNode.create_trimesh_collision()
-	else:
-		meshNode.create_convex_collision()
-	#if(meshNode.get_children()) == []:
-	#	return
-	meshNode.get_parent().remove_child(meshNode)
-	var staticBodyNode = meshNode.get_child(0)
-
-	if meshNode.has_meta("hotFace"):
-		var shape = staticBodyNode.get_child(0)
-		shape.get_parent().remove_child(shape)
-		staticBodyNode.queue_free()
-		staticBodyNode = KinematicBody.new()
-		#staticBodyNode.add_child(shape)
-		if meshNode.has_meta("fans"):
-			print(meshNode.get_meta("fans"))
-		#for i in meshNode.get_meta("fans"):
-		#	print(i)
-			
-		
-	
-	if meshNode.get_meta("textureName")[0]  == "!":
-		var shape = staticBodyNode.get_child(0)
-		shape.get_parent().remove_child(shape)
-		staticBodyNode.queue_free()
-		staticBodyNode = Area.new()
-		staticBodyNode.add_child(shape)
-		
 	
 	meshNode.remove_child(staticBodyNode)
 	meshNode.name = "face" + String(theFaceIndex)
@@ -677,7 +539,7 @@ func findCommonverts(v1,v2):
 
 			if(abs(diff.x) < 0.0001 and abs(diff.y) < 0.0001 and abs(diff.z) < 0.0001):
 				count += 1
-				commonIndexes.append([i,j])
+				commonIndexes.append([i,j])#we get all common tuples
 
 	if count < 2:#its only valid if two vertices are in common. But we only return the CW one
 		return null
@@ -716,36 +578,56 @@ func findCommonverts(v1,v2):
 	return commonIndexes
 
 
-func coplanarCombine(f1,f2):
+func coplanarCombine(a,b):
 	#return null
-
-	var norm1 = planes[f1["planeIndex"]]["normal"]
-	var norm2 = planes[f2["planeIndex"]]["normal"]
-	if norm1 != norm2:
+	for textureName in a["fans"].keys():
+		if b["fans"].has(textureName):
+			for f1 in a["fans"][textureName]:
+				for f2 in b["fans"][textureName]:
+					if f1["normal"] == f2["normal"]:
+						var v1 = f1["verts"]
+						var v2 = f2["verts"]
+				
+						print(v1)
+						print(v2)
+						var combined = combineVerts(v1,v2)
+						if combined != null:
+							f1["verts"] = combined
+							b["fans"][textureName].erase(f2)
+							#breakpoint
+						print(combined)
+				
+				
+	#var norm1 = f1#planes[f1["planeIndex"]]["normal"]
+	#var norm2 = planes[f2["planeIndex"]]["normal"]
+	#if norm1 != norm2:
 		#print("normal not equal:",norm1,",",norm2)
-		return null
+	#	return null
 
-	var combined = combineVerts(f1["verts"],f2["verts"])
+	#var combined = combineVerts(f1["verts"],f2["verts"])
 	#if combined == null:
 	#	print()
 
-	return combined
+	return true#combined
 
 
 func combineVerts(v1,v2,debug=false):
 
-	#if get_parent().simpleCombine == false:
-	#	return null
+
 	v1 = removeColinear(v1)
 	v2 = removeColinear(v2)
+	if v1.size()!=4:
+		return null
+		
+	if v2.size()!=4:
+		return null
 	var comms = findCommonverts(v1,v2)
 	if comms == null:
 		return null
 	if comms == []:
 		return null
 	var finalComb = []
-	#v2.erase(comms[0][1])
-	#v2.erase(comms[1][1])
+
 
 	var merged = false
 	for a in range(0,v1.size()):
@@ -758,12 +640,8 @@ func combineVerts(v1,v2,debug=false):
 				merged = true
 
 
-		else: finalComb.append(v1[a])#there is an optimization to be found here if you only include the commonovverts once and know it won't cause a bad poly
-	#if debug:
-		#print(comms)
-		#print(v1)
-		#print(v2)
-		#print("final:",finalComb)
+		else: finalComb.append(v1[a])
+
 	return finalComb
 
 
@@ -783,45 +661,7 @@ func getBottomRightVert(verts):
 		if v.z > TL.z: TL.z = v.z
 	return Vector3(TL.x,TL.y,TL.z)
 
-func projectVerts(verts):
-	var origin = Vector3.ZERO
-	var line1 = (verts[1] - verts[0]).normalized()
 
-	var line2 = (getCenter(verts) - verts[0]).normalized()
-
-	var normal = line1.cross(line2).normalized()
-
-	var side = line1.cross(normal).normalized()
-
-	var transform =  Transform(line1,side,normal,Vector3.ZERO)
-	var out = []#normal
-
-	for v in verts:
-		out.append(transform.xform_inv(v))
-
-	return out
-
-func projectVerts2(verts):#aligns to top left
-	var TL = getTopLeftVert(verts)
-	var dim = getBB(verts)["min"]# + getBB(verts)["dim"]
-	var center = getCenter(verts)
-
-	var origin = Vector3.ZERO
-	var line1 = (verts[1] - verts[0]).normalized()
-	var line2 = (getCenter(verts) - verts[0]).normalized()
-	var normal = line1.cross(line2).normalized()
-	var side = line1.cross(normal).normalized()
-
-	var transform =  Transform(line1,side,normal,Vector3.ZERO)
-
-
-
-
-	#var transform =  Transform(line1,normal,side,Vector3.ZERO)
-	#var transform =  Transform(side,line1,normal,Vector3.ZERO)
-	#var transform =  Transform(side,normal,line1,Vector3.ZERO)
-	#var transform =  Transform(normal,side,line1,Vector3.ZERO)
-	#var transform =  Transform(normal,line1,side,Vector3.ZERO)
 	var out = []
 
 	for v in verts:
@@ -846,55 +686,9 @@ func uvProjection(vert,normal):
 
 
 
-func texProject(vert,texInfo,texture):
-	if texture == null:
-		return Vector2.ZERO
-
-	var vs = texInfo["vS"]
-	var fShift = texInfo["fSShift"]
-	var vt = texInfo["vT"]
-	var tShift = texInfo["fTShift"]
-
-
-	var u = vert.dot(vs) #+ fShift# / texture.get_width())
-	var v = vert.dot(vt) #+ tShift#/ texture.get_height())
-
-	u /=  texture.get_width() * get_parent().scaleFactor
-	v /=  texture.get_height() * get_parent().scaleFactor
-
-	u += fShift / texture.get_width()
-	v += tShift / texture.get_height()
-	return Vector2(u,v)
-
-func projectVerts3(verts):
-	var TL = getTopLeftVert(verts)
-	var line1 = (verts[1] - verts[0]).normalized()
-	var line2 = (getCenter(verts) - verts[0]).normalized()
-	var normal = line1.cross(line2).normalized()
-	var side = line1.cross(normal).normalized()
-
-
-	var transform =  Transform(line1,side,normal,Vector3.ZERO)
-	var out= []
-	for v in verts:
-		out.append(transform.xform_inv(v))
-
-	return {"vertices":out,"transform":transform}
-
-func removeVerts(verts):
-	for v in verts.size():
-		var a = verts[(v+0)%verts.size()]
-		var b = verts[(v+1)%verts.size()]
-		var c = verts[(v+2)%verts.size()]
-		var s1 = (a-b).normalized()
-		var s2 = (c-a).normalized()
-		if s1 == s2:
-			breakpoint
-
-
 func removeColinear(verts):
 	var out = []
-
+	
 	for v in verts.size():
 		var a = verts[(v-1)%verts.size()]
 		var b = verts[(v)]
@@ -903,7 +697,6 @@ func removeColinear(verts):
 			continue
 
 		out.append(verts[v])
-		#out.append(Vector3())
 	return out
 
 
@@ -913,283 +706,65 @@ func generateEdgeTrackerFaces():
 	var hotFaces = get_parent().hotFaces
 	var firstskipped = false
 
-
-	var facesToMerge = get_parent().faces
-	var itt = 0
-
-	for face in faces:
+	var mergeTextureFactor = get_parent()
+	renderables = get_parent().renderables
+	renderableEdges = get_parent().renderableEdges
+	var faceIdx = -1 
+	for face in renderables:
+		faceIdx += 1
+		if face.size()==0:
+			continue
+		
+		
 		var mergeHappened = true
-
-		var faceIdx = faces.find(face)
-		#print("-->",faceIdx)
-		#var deleteEdges = []
-		#print("pre edges f1:",face["actualEdges"])
 		while(mergeHappened):
 			mergeHappened = false
-
-			for edge in face["actualEdges"]:
-
-				var edgeIndex = face["actualEdges"]
-
+			for edge in renderableEdges[faceIdx]:
 				if edgeToFaceIndexMap.has(edge):
+					
+					if edgeToFaceIndexMap[edge].size() < 2:
+						continue
 					var test = edgeToFaceIndexMap[edge]
-					#print("checking edge ", edge, " with faces ", test)
+					
 					if test.size()<2:
 						continue
 
 					var otherFaceIdx
 
-
 					if test[0] == faceIdx: otherFaceIdx = test[1]
 					elif test[1] == faceIdx: otherFaceIdx = test[0]
 					else:
-					#	print("cur face not in edge")
 						continue
-
-					if hotFaces.has(otherFaceIdx) or renderModeFaces.has(otherFaceIdx):
-						continue
-					#if get_parent().renderModeFaces.has(otherFaceIdx):
-					#	breakpoint
-
-					var textureName = face["textureName"]#textureI["name"]
-					var textureName2 = faces[otherFaceIdx]["textureName"]
-
-					var f1 =  face
-					var f2 = faces[otherFaceIdx]
-					var ti1 =  textureInfos[f1["textureInfo"]]
-					var ti2 = textureInfos[f2["textureInfo"]]
-					#if ti1 != ti2:
-					#	continue
-
-					if textureName2 != textureName:
-						continue
-
-
-
-					if faceIdx == otherFaceIdx:
-					#	print("same faces")
-						continue
-
-					var a = OS.get_system_time_msecs()
-
-					var combined =null
-					if get_parent().simpleCombine:
-						combined = coplanarCombine(faces[faceIdx],faces[otherFaceIdx])
-						if combined == null:
-							print("failed combine on:",faceIdx,",",otherFaceIdx)
-
-					if combined != null:
-
-						print("coplanar combine worked on:",faceIdx,",",otherFaceIdx)
-					#	print(faceIdx,",",otherFaceIdx)
-					#	print(faces[faceIdx]["verts"])
-					#	print(faces[otherFaceIdx]["verts"])
-					#	print(combined)
-					#	print("-------")
-						faces[faceIdx]["verts"] = combined
-						faces[otherFaceIdx]["verts"] = []
-
-					else:
+					
+					if faceIdx == otherFaceIdx: continue
+					var otherFace = renderables[otherFaceIdx]
+					
+					var cont = false
+					if face.keys().size() == get_parent().texturesPerMesh:
+						var otherFaceTextures = otherFace.keys()
+						for t in otherFaceTextures:
+								if !face.has(t):
+									cont = true
+									
+					if cont == true: continue
+					
+					for texture in face:
+						if(hotFaces.has(otherFaceIdx) or renderModeFaces.has(otherFaceIdx)): 
+							continue
+						
+						
+						var combined =null
 						var flag = mergeFaceFunc(faceIdx,otherFaceIdx)
 
 						if flag == false:
 							continue
 
-					mergeHappened = true
-					#print("merged: ",faceIdx,",",otherFaceIdx," ",faces[faceIdx]["origFaces"])
-					#print(faces[otherFaceIdx]["actualEdges"])
-					var otherFacesEdges = faces[otherFaceIdx]["actualEdges"].duplicate()
-
-					faces[otherFaceIdx]["actualEdges"] = [] #face edges set to zero so when the loop gets to it nothing is checked
-					faces[faceIdx]["actualEdges"] += otherFacesEdges
-
-
-
-					for e in otherFacesEdges:
-						if !edgeToFaceIndexMap.has(e):
-							continue
-						if edgeToFaceIndexMap[e].size()<1:
-							continue
-
-						if edgeToFaceIndexMap[e][0] == otherFaceIdx:
-							edgeToFaceIndexMap[e][0] = faceIdx
-
-						if edgeToFaceIndexMap[e].size()<2:
-							continue
-
-						if edgeToFaceIndexMap[e][1] == otherFaceIdx:
-							edgeToFaceIndexMap[e][1] = faceIdx
-
-					edgeToFaceIndexMap.erase(edge)#edge dosen't exist anymore
-
-
-			#print("post edges:",face["actualEdges"])
-	return
-
-
-
-func mergeFaceFunc(f1Index,f2Index,itt = 0):
-
-		if faces.size() < f2Index:
-			return false
-		var f1 = faces[f1Index]
-		var f2 = faces[f2Index]
-
-
-
-		if !f1.has("verts") and !f1.has("fans"): return null
-		if !f2.has("verts") and !f2.has("fans"): return null
-
-		#print(faces[f2Index]["actualEdges"])
-		if faces[f1Index]["actualEdges"].empty() or faces[f2Index]["actualEdges"].empty():
-			return false
-
-
-		var norm1 = planes[f1["planeIndex"]]["normal"]
-		var norm2 = planes[f2["planeIndex"]]["normal"]
-
-		if f1["planeSide"] == 1: norm1 = -norm1
-		if f2["planeSide"] == 1: norm2 = -norm2
-
-
-		var m1 = faces[f1Index]
-		var m2 = faces[f2Index]
-
-		if m1 == null or m2 == null:
-			return false
-		var textureName = f1["textureName"]
-
-		if !f1.has("fans"):
-			if f1["verts"] != []:
-				f1["fans"] = {}
-				var texInfo = f1["textureInfo"]
-				f1["fans"][textureName] = [{"verts":f1["verts"],"normal":norm1,"texinfo":textureInfos[texInfo]}]#don't want [[empty]]
-			else:
-				f1["fans"][textureName] = {}
-
-
-		var f2textureName = f2["textureName"]
-		if f2.has("fans"):
-			f1["fans"][f2textureName] += f2["fans"]
-			f1["origFaces"] += f2["origFaces"]
-			f2.erase("fans")
-
-		if f2["verts"] != []:# and f1.has("fans"):
-			var texInfo = f2["textureInfo"]
-			if !f1["fans"].has(f2textureName):
-				f1["fans"][f2textureName] = []
-			f1["fans"][f2textureName].append({"verts":f2["verts"],"normal":norm2,"texinfo":textureInfos[texInfo]})
-			f1["origFaces"].append(f2Index)
-
-		faces[f1Index]["verts"] = []
-		faces[f2Index]["verts"] = []
-
-		return true
-
-
-func mergeBrushModelFaces2():
-	var first = true
-	var test0 = get_parent().modelRenderModes
-	var idx = -1
-	for model in brushModels:
-
-		idx+=1
-		if first:
-			first = false
-			continue
-		#if get_parent().modelRenderModes.has(String(idx)):
-		#	continue
-		#	breakpoint
-		var modelFaceIdxs = model["faceArr"]
-		#var faceIdxs = faces[modelFaceIdxs]
-		var mergeHappened = true
-		for faceIdx in modelFaceIdxs:
-			var face = faces[faceIdx]
-			if renderModeFaces.has(faceIdx):
-				continue
-				#breakpoint
-
-			#var faceIdx = faces.find(face)
-			#print("-->",faceIdx)
-			#var deleteEdges = []
-			#print("pre edges f1:",face["actualEdges"])
-			while(mergeHappened):
-				mergeHappened = false
-
-				for edge in face["actualEdges"]:
-
-					var edgeIndex = face["actualEdges"]
-
-					if edgeToFaceIndexMap.has(edge):
-						var test = edgeToFaceIndexMap[edge]
-						#print("checking edge ", edge, " with faces ", test)
-						if test.size()<2:
-							continue
-
-						var otherFaceIdx
-
-
-						if test[0] == faceIdx: otherFaceIdx = test[1]
-						elif test[1] == faceIdx: otherFaceIdx = test[0]
-						else:
-							#print("cur face not in edge")
-							continue
-
-						if !hotFaces.has(otherFaceIdx) or renderModeFaces.has(otherFaceIdx):
-							print("not in hot face")
-							continue
-						#if get_parent().renderModeFaces.has(otherFaceIdx):
-						#	breakpoint
-
-						var textureName = face["textureName"]#textureI["name"]
-						var textureName2 = faces[otherFaceIdx]["textureName"]
-
-						var f1 =  face
-						var f2 = faces[otherFaceIdx]
-						var ti1 =  textureInfos[f1["textureInfo"]]
-						var ti2 = textureInfos[f2["textureInfo"]]
-						#if ti1 != ti2:
-						#	continue
-
-						#if textureName2 != textureName:
-						#	print("textures not the same")
-						#	continue
-
-						if faceIdx == otherFaceIdx:
-							#print("same faces")
-							continue
-
-						var a = OS.get_system_time_msecs()
-
-
-						var combined =null
-						if combined != null:
-							#print("combine:",faceIdx,",",otherFaceIdx)
-						#	print(faceIdx,",",otherFaceIdx)
-						#	print(faces[faceIdx]["verts"])
-						#	print(faces[otherFaceIdx]["verts"])
-						#	print(combined)
-						#	print("-------")
-							faces[faceIdx]["verts"] = combined
-							faces[otherFaceIdx]["verts"] = []
-
-						else:
-							var flag = mergeFaceFunc(faceIdx,otherFaceIdx)
-
-							if flag == false:
-								#print("merge face func failed")
-								continue
-
 						mergeHappened = true
-						#print("merged: ",faceIdx,",",otherFaceIdx," ",faces[faceIdx]["origFaces"])
-						#print(faces[otherFaceIdx]["actualEdges"])
-						var otherFacesEdges = faces[otherFaceIdx]["actualEdges"].duplicate()
-
-						faces[otherFaceIdx]["actualEdges"] = [] #face edges set to zero so when the loop gets to it nothing is checked
-						faces[faceIdx]["actualEdges"] += otherFacesEdges
-						modelFaceIdxs.erase(otherFaceIdx)
-
-
+						
+						var otherFacesEdges = renderableEdges[otherFaceIdx].duplicate()
+						renderableEdges[otherFaceIdx].clear()
+						renderableEdges[faceIdx] += otherFacesEdges
+							
 						for e in otherFacesEdges:
 							if !edgeToFaceIndexMap.has(e):
 								continue
@@ -1206,20 +781,116 @@ func mergeBrushModelFaces2():
 								edgeToFaceIndexMap[e][1] = faceIdx
 
 						edgeToFaceIndexMap.erase(edge)#edge dosen't exist anymore
+					
+	return
 
 
-				#print("post edges:",face["actualEdges"])
+func mergeFaceFunc(f1Index,f2Index,hotFaces = false):
+		if renderables.size() < f2Index:
+			return false
+		
+		var f1 = renderables[f1Index]
+		var f2 = renderables[f2Index]
+		var mergeCount = 0
+		
+		if renderableEdges[f1Index].empty() or renderableEdges[f2Index].empty():
+			return false
+			
+		var newTextureCount = 0
+		if !hotFaces:
+			var seenDict = {}
+			for textureName in f2:
+				if !f1.has(textureName) and !seenDict.has(textureName):
+					seenDict[textureName] = true
+					newTextureCount +=1
+		else:
+			newTextureCount = -INF
+		
+		
+		if (f1.size() + newTextureCount) > get_parent().texturesPerMesh:
+			return false
+		
+		
+		for textureName in f2:
+			var normals1 = getFansNormals(f1)#
+			var normals2 = getFansNormals(f2)
+			if normals1.size() > 3 and !hotFaces: continue
+			if normals2.size() > 3 and !hotFaces: continue
+			
+			var norm2 = f2[textureName][0]["normal"]
+			if f1.has(textureName):
+				var norm1 = f1[textureName][0]["normal"]
+				if norm2 == norm1 or hotFaces:#this stops the lightmap unwrap function from asserting false but not sure why
+					#print(norm1,",",norm2)
+					f1[textureName] += f2[textureName]
+					f2.erase(textureName)
+					mergeCount+=1
+				else:
+					if mergeCount > 0:
+						breakpoint
+					return false
+			else:
+					#if f1[f1.keys()[0]][0]["normal"] == norm2 or hotFaces:
+					#if f1[f1.keys()[0]][0]["normal"] == norm2 or hotFaces:
+					if normals1 == normals2 or hotFaces:
+						f1[textureName] = f2[textureName]
+						f2.erase(textureName)
+						mergeCount +=1
+					#if norm2 == norm1:
+					#	print(angle)
+					#	f1[textureName] = f2[textureName]
+					#	f2.erase(textureName)
+					#	mergeCount+=1
+					else:
+						if mergeCount > 0:
+							breakpoint
+						return false
+						
+		
+		
+		#for textureName in f2:
+		#	if f1.has(textureName):
+		#		f1[textureName] += f2[textureName]
+		#		f2.erase(textureName)
+		#	else:
+		#		f1[textureName] = f2[textureName]
+		#		f2.erase(textureName)
+		if mergeCount == 0:
+			return false
+		return true
 
 
 
-func getTexturesOfFaceArr(arr):
-	var textureArr = []
-	for faceIdx in arr:
-		var textureName = faces[faceIdx]["textureName"]
-		if !textureArr.has(textureName):
-			textureArr.append(textureName)
+func mergeBrushModelFaces3():
+	var first = true
+	var faces 
+	#var test0 = get_parent().modelRenderModes
+	for model in brushModels:
+		if first:
+			first = false
+			continue
+		
+		var modelFaceIdxs = model["faceArr"].duplicate()
+		if modelFaceIdxs.size() < 1:
+			return
+		
+		var face1Idx = modelFaceIdxs.pop_front()
+		var face1 = renderables[face1Idx]
+		
+		for faceBIdx in modelFaceIdxs:
+			var faceB = renderables[faceBIdx]
+			
+			if renderModeFaces.has(faceBIdx):
+				print("model contains render surface")
+				continue
 
-	return textureArr
+			var flag = mergeFaceFunc(face1Idx,faceBIdx,true)
+			if flag == false:
+				continue
+			renderModeFaces.erase(faceBIdx)
+			
+					
+
 
 func loadTGAasImage(path):
 	var file = File.new()
@@ -1258,56 +929,66 @@ func rotImage(image:Image,dir):
 	#breakpoint
 
 func textureLights():
+	return
 	var meshNodes = get_parent().faceMeshNodes
+	
+	var textureLightPar = Spatial.new()
+	textureLightPar.name = "Texture Lights"
+	get_parent().add_child(textureLightPar)
+	var oneshotDict = {}
 	for f in meshNodes.values():
 		if f == null:
 			continue
+			
 		if f.has_meta("textureName"):
 			var textureName = f.get_meta("textureName")
 			if rads.has(textureName):
+				
 				var color = rads[textureName]
-				var light = OmniLight.new()
+				var light = SpotLight.new()
 				var normal = f.get_meta("normal")
-				print(normal)
-				light.omni_range = 10
+				
+				#light.omni_range = 125
 				light.name = textureName
-				#light.translation += normal
-				get_parent().get_node("Lights").add_child(light)
+				light.light_color = color
+				light.light_energy = 1.7
+				textureLightPar.add_child(light)
+				light.spot_range = 47
+				light.spot_attenuation = 1.72
+				light.spot_angle = 42
+				light.spot_angle_attenuation = 1.2
+				light.light_indirect_energy = 3
+				light.translation += f.global_transform.origin
+
+		
+				light.translation -= normal*get_parent().scaleFactor*5
+				light.set_meta("norm",normal)
+				light.set_meta("angle",atan2(normal.z,normal.y))
+				
+			
+				var ang = acos(normal.dot(Vector3(0,0,1)))
+				var rotAxis = normal.cross(Vector3(0,0,1))
+				light.rotate(rotAxis,ang)
+				#light.rotate_x(atan2(normal.z,normal.y))#rad2deg(90))
+
+				#light.rotation_degrees.x += 90
+				#light.shadow_enabled = true
+				var indirectFake : OmniLight = OmniLight.new()
+				textureLightPar.add_child(indirectFake)
+				indirectFake.translation += f.global_transform.origin +  normal*get_parent().scaleFactor*10
+				indirectFake.omni_range = 10
+				if !oneshotDict.has(textureName):
+					print(textureName)
+					oneshotDict[textureName] = 1
 
 
-func textureLights2():
-	var createdPlanes = []
-	for face in faces:
-		var center = getCenter(face["verts"])
-		var plane = planes[face["planeIndex"]]
-		var norm = plane["normal"]
-		var index = face["planeIndex"]
-		if createdPlanes.has(face["textureInfo"]):
-			continue
-		var textureName = face["textureName"]
-		norm.y = -norm.y
+func getFansNormals(fans):
+	var normals = []
+	for texture in fans.keys():
+		for face in fans[texture]:
+			var normal = face["normal"]
+			if !normals.has(normal):
+				normals.append(normal)
 
-
-		if rads.has(textureName):
-			var color = rads[textureName]
-			var light = OmniLight.new()
-			light.omni_range = 20
-			light.translation = center+norm*get_parent().scaleFactor*10
-			get_parent().add_child(light)
-
-		createdPlanes.append(index)
-			#LineDraw.drawSphere(center+norm*get_parent().scaleFactor*10)
-		#breakpoint
-
-func CC(f1,f2):
-	for face in faces:
-		var norm1 = planes[f1["planeIndex"]]["normal"]
-		var norm2 = planes[f2["planeIndex"]]["normal"]
-		if norm1 != norm2:
-		#print("normal not equal:",norm1,",",norm2)
-			return null
-
-		var combined = combineVerts(f1["verts"],f2["verts"])
-
-
-	breakpoint
+	return normals
+	

@@ -1,3 +1,4 @@
+tool
 extends Spatial
 
 
@@ -24,7 +25,7 @@ var lockedSound
 var target = null
 var open = false
 func _ready():
-
+	
 	#if name == "G_DOOR":
 	#	breakpoint
 	dim = get_meta("dim")#Vector3(dimX,dimY,dimZ)
@@ -43,7 +44,7 @@ func _ready():
 		var gp= get_parent().get_parent()
 		targetNodes.append(gp.get_node("Geometry").get_node(i))
 	if has_meta("speed"):
-		speed = get_meta("speed")*2
+		speed = get_meta("speed")*4
 	#speed = get_meta("speed")*2
 
 	if has_meta("angles"):
@@ -52,18 +53,16 @@ func _ready():
 		var pitch = deg2rad(rot.y)
 		var roll = deg2rad(rot.z)
 		
-		dir.y = -cos(yaw)*sin(pitch)*sin(roll)-sin(yaw)*cos(roll)
-		dir.x = -sin(yaw)*sin(pitch)*sin(roll)+cos(yaw)*cos(roll)
+		dir.y = -(-cos(yaw)*sin(pitch)*sin(roll)-sin(yaw)*cos(roll))
+		dir.x = -(-sin(yaw)*sin(pitch)*sin(roll)+cos(yaw)*cos(roll))
 		dir.z = cos(pitch)*sin(roll)
 
-		dir.y *= -1
-		dir.x *= -1
 		
 		if abs(roll) >=0.01 and abs(yaw) >= 0.01:
 			dir.y = -dir.z
 			dir.z = 0
-	
-		#LineDraw.drawLine(Vector3.ZERO,dir)
+		
+		#draw.drawLine(Vector3.ZERO,dir)
 	
 		if abs(dir.x) > 0.01: 
 			destScaler.x = 1
@@ -84,6 +83,7 @@ func _ready():
 	else:
 		destination = dir*dim
 	
+#	draw.drawSphere(destination)
 	#print(name,":",dir,":",destination)
 	
 
@@ -94,28 +94,27 @@ func _physics_process(delta):
 		return
 
 
-	#print(translation)
-	if abs(inc.y) >= abs(destination.y):
-		if abs(inc.x) >= abs(destination.x):
-			if abs(inc.z) >= abs(destination.z):
-					return
-	
+	#if abs(inc.y) >= abs(destination.y):
+	#	if abs(inc.x) >= abs(destination.x):
+	#		if abs(inc.z) >= abs(destination.z):
+	#				return
 	
 	for i in targetNodes:
 		if abs(inc.x) < abs(destination.x): 
-			i.translation.x += dir.x * 0.00015*speed
-			inc.x += dir.x*0.00015*speed
+			
+			i.translation.x += dir.x * 0.0025 *speed*scaleFactor
+			#inc.x += dir.x*0.00015*speed
 	
 		if abs(inc.y) < abs(destination.y): 
-			i.translation.y += dir.y * 0.00015*speed
-			inc.y += dir.y*0.00015*speed
+			i.translation.y += dir.y *0.0025 *speed*scaleFactor
+			#inc.y += dir.y*0.00015*speed
 		
 		if abs(inc.z) < abs(destination.z): 
-			i.translation.z += dir.z * 0.00015*speed
-			inc.z += dir.z*0.00015*speed
+			i.translation.z += dir.z * 0.0025*speed*scaleFactor
+			#inc.z += dir.z*0.00015*speed
 			
 	
-	#inc += dir*0.00015*speed
+	inc += dir*0.0025*speed*scaleFactor
 	
 	
 	
@@ -138,7 +137,7 @@ func open():
 		active = true
 		if target != null:
 			for i in get_tree().get_nodes_in_group(target):
-				i.activate()
+				i.toggle()
 		if moveSound != null:
 			moveSound.play()
 	
@@ -147,7 +146,7 @@ func open():
 			if !lockedSound.playing:
 				lockedSound.play()
 
-func activate():
+func toggle():
 	locked = false
 	
 	
@@ -156,7 +155,7 @@ func activate():
 		
 		if target != null:
 			for i in get_tree().get_nodes_in_group(target):
-				i.activate()
+				i.toggle()
 		
 		if moveSound != null:
 			moveSound.play()

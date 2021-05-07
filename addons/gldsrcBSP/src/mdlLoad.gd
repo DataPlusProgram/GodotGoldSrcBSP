@@ -8,10 +8,9 @@ var boneIndex = 0
 var boneMap = {}
 var ittCount = -1
 var killSwitch = false
+#onready var ig = get_node("../ImmediateGeometry")
 
-func _ready():
-	set_meta("hidden",true)
-	
+
 func mdlParse(path): 
 	file = load("res://addons/gldsrcBSP/DFile.gd").new()
 	
@@ -23,11 +22,11 @@ func mdlParse(path):
 	fileDict["version"] = file.get_32()
 	fileDict["name"] = file.get_String(64)
 	fileDict["size"] = file.get_32()
-	fileDict["eyePosition"] = file.get_Vector32()
-	fileDict["min"] = file.get_Vector32()
-	fileDict["max"] = file.get_Vector32()
-	fileDict["bbmin"] = file.get_Vector32()
-	fileDict["bbmax"] = file.get_Vector32()
+	fileDict["eyePosition"] = getVectorXZY(file)
+	fileDict["min"] = getVectorXZY(file)
+	fileDict["max"] = getVectorXZY(file)
+	fileDict["bbmin"] = getVectorXZY(file)
+	fileDict["bbmax"] = getVectorXZY(file)
 	fileDict["flags"] = file.get_32()
 	fileDict["numBones"] = file.get_32()
 	fileDict["boneIndex"] = file.get_32()
@@ -61,6 +60,21 @@ func mdlParse(path):
 	for i in fileDict["numTextures"]:
 		textures.append(parseTexture())
 	
+	if fileDict["numTextures"] == 0:
+		var searchPath = path.split(".")[0]
+		searchPath = searchPath + "t.mdl"
+		var fExist= File.new()
+		var doesExist = fExist.file_exists(searchPath)
+		fExist.close()
+			
+		if doesExist:
+			var textureParse = Node.new()
+			var script = load("res://addons/gldsrcBSP/src/mdlLoad.gd")
+			textureParse.set_script(script)
+			add_child(textureParse)
+			textures = textureParse.mdlParseTextures(searchPath)
+	
+	
 	parseBones()
 	boneHier2()
 	var seq = parseSequence()
@@ -68,6 +82,42 @@ func mdlParse(path):
 	
 	
 	
+func mdlParseTextures(path): 
+	file = load("res://addons/gldsrcBSP/DFile.gd").new()
+	
+	if !file.loadFile(path):
+		print("file not found")
+		return false
+		
+	fileDict["magic"] = file.get_String(4)
+	fileDict["version"] = file.get_32()
+	fileDict["name"] = file.get_String(64)
+	fileDict["size"] = file.get_32()
+	fileDict["eyePosition"] = getVectorXZY(file)
+	fileDict["min"] = getVectorXZY(file)
+	fileDict["max"] = getVectorXZY(file)
+	fileDict["bbmin"] = getVectorXZY(file)
+	fileDict["bbmax"] = getVectorXZY(file)
+	fileDict["flags"] = file.get_32()
+	fileDict["numBones"] = file.get_32()
+	fileDict["boneIndex"] = file.get_32()
+	fileDict["numbonecontrollers"] = file.get_32()
+	fileDict["bonecontrollerindex"] = file.get_32()
+	fileDict["numhitboxes"] = file.get_32()
+	fileDict["hitboxindex"] = file.get_32()
+	fileDict["numseq"] = file.get_32()
+	fileDict["seqindex"] = file.get_32()
+	fileDict["numseqgroups"] = file.get_32()
+	fileDict["seqgroupindex"] = file.get_32()
+	fileDict["numTextures"] = file.get_32()
+	fileDict["textureindex"] = file.get_32()
+	fileDict["texturedataindex"] = file.get_32()
+	
+	file.seek(fileDict["textureindex"])
+	for i in fileDict["numTextures"]:
+		textures.append(parseTexture())
+	
+	return textures
 
 func saveScene():
 	var i = 0
@@ -161,11 +211,11 @@ func parseSequence():
 		sequenceDict["pivotIndex"] = file.get_32()
 		sequenceDict["motionType"] = file.get_32()
 		sequenceDict["motionBone"] = file.get_32()
-		sequenceDict["linearMovement"] = file.get_Vector32()
+		sequenceDict["linearMovement"] = getVectorXZY(file)
 		sequenceDict["autoMovePosIndex"] = file.get_32()
 		sequenceDict["autoMovoeAngleIndex"] = file.get_32()
-		sequenceDict["bbMin"] = file.get_Vector32()
-		sequenceDict["bbMax"] = file.get_Vector32()
+		sequenceDict["bbMin"] = getVectorXZY(file)
+		sequenceDict["bbMax"] = getVectorXZY(file)
 		sequenceDict["numBlends"] = file.get_32()
 		sequenceDict["animIndex"] = file.get_32()
 		sequenceDict["blendType0"] = file.get_32()
@@ -182,7 +232,62 @@ func parseSequence():
 		sequenceDict["nextFlags"] = file.get_32()
 		
 		sequences.append(sequenceDict)
+		parseAnims(sequenceDict["animIndex"],sequenceDict["numBlends"],sequenceDict["numframes"])
+		
 	return sequences
+
+func parseAnims(offset,numBlends,numFrames):
+	file.seek(offset)
+	
+	var boneToOffset = []
+	var blendOffsets = []
+	
+	
+	var blendLength = 6 * bones.size()#a pos and rot for each bone
+	for o in numBlends*blendLength:
+		blendOffsets.append(file.get_16())#an offset for each value xyz rxryryx
+	
+	var boneAnimData = []
+	
+	for boneIdx in bones.size():
+		for f in numFrames:
+			var animData = []
+			animData.resize(numFrames)
+			
+			for i in numFrames:
+				animData[i] = 0
+			
+			var compressedSize = file.get_8()
+			var uncompressedSize = file.get_8()
+			var compressedData = []
+			
+			for i in compressedSize:
+				compressedData.append(file.get_16u())
+			
+			var i = 0
+			var j = 0
+			
+			while(j < uncompressedSize and i < numFrames):
+				var index = min(compressedSize-1,j)
+				animData[i] = compressedData[index]
+				j+=1
+				i+=1
+			boneAnimData.append(animData)
+			
+
+	#breakpoint
+
+	#for bone in bones.size():
+		
+	#	var xOffset = file.get_16()
+	#	var yOffset = file.get_16()
+	#	var zOffset = file.get_16()
+	#	var xrOffset = file.get_16()
+	#	var yrOffset = file.get_16()
+	#	var zrOffset = file.get_16()
+	#	boneToOffset.append({"xOffset":xOffset,"yOffset":yOffset,"zOffset":zOffset,"xrOffset":xrOffset,"yrOffset":yrOffset,"zrOfsset":zrOffset})
+		
+#	breakpoint
 
 func parseBones():
 	file.seek(fileDict["boneIndex"])
@@ -202,33 +307,16 @@ func parseBone():
 	boneDict["rotX"] = file.get_32()
 	boneDict["rotY"] = file.get_32()
 	boneDict["rotZ"] = file.get_32()
-	boneDict["pos"] = file.get_Vector32()
-	boneDict["rot"] = file.get_Vector32()
-	boneDict["scaleP"] = file.get_Vector32()
-	boneDict["scaleR"] = file.get_Vector32()
+	boneDict["pos"] = getVectorXZY(file)
+	boneDict["rot"] = getVectorXZY(file)
+	boneDict["scaleP"] = getVectorXZY(file)
+	boneDict["scaleR"] = getVectorXZY(file)
 	boneDict["index"] = String(boneIndex)
+	boneDict["transform"] = Transform.IDENTITY
 	var sphere = CSGSphere.new()
-	sphere.radius = 0.5
-	#print(boneDict["name"],":",boneDict["pos"])
-	sphere.translation = boneDict["pos"]
-	sphere.rotation = boneDict["rot"]
-	#add_child(sphere)
-	#boneDict["node"] = sphere
-	var boneTransform  = Transform.IDENTITY
-	print(boneTransform)
-	boneTransform.translated(boneDict["pos"])
+	
+	#boneDict["rot"] = Vector3(-boneDict["rot"].x,boneDict["rot"].z,boneDict["rot"].y)
 
-	print(boneTransform)
-	var rotVect = boneDict["rot"]
-	boneDict["transform"] = boneTransform
-	
-	boneDict["thePos"] = boneDict["pos"]
-	#bone["pos"] = boneDict["thePos"].rotated(Vector3(1,0,0),rotVect.x)
-	#bone["pos"] = boneDict["thePos"].rotated(Vector3(0,1,0),rotVect.y)
-	#bone["pos"] = boneDict["thePos"].rotated(Vector3(0,0,1),rotVect.z)
-	
-	
-	
 		#breakpoint
 	boneIndex += 1
 	return boneDict
@@ -267,13 +355,11 @@ func parseModel(offset):
 	var boneMap = []
 	file.seek(modelDict["vertIndex"])
 	for i in range(0,modelDict["numverts"]):
-		var v = file.get_Vector32()
-		
-		verts.append(Vector3(v.x,v.y,v.z))
+		verts.append(getVectorXZY(file))
 	
 	file.seek(modelDict["normIndex"])
 	for i in range(0,modelDict["numNorms"]):
-		norms.append(file.get_Vector32())
+		norms.append(getVectorXZY(file))
 	
 	
 	file.seek(modelDict["vertinfoindex"])
@@ -413,13 +499,17 @@ func createMesh(vertices,normals,type,uv,boneIndices,textureIndex,runningMesh=nu
 		#bonePos = bonePos.rotated(Vector3(0,1,0),boneRot.y)
 		#bonePos = bonePos.rotated(Vector3(0,0,1),boneRot.z)
 		
-		print(boneIndices[v])
+		
 		var vert = vertices[v]
 		
-		vert = vert.rotated(Vector3(1,0,0),boneRot.x)
-		vert = vert.rotated(Vector3(0,1,0),boneRot.y)
-		vert = vert.rotated(Vector3(0,0,1),boneRot.z)
-		vert += bonePos
+		#vert = vert.rotated(Vector3(1,0,0),boneRot.x)
+		#vert = vert.rotated(Vector3(0,1,0),boneRot.y)
+		#vert = vert.rotated(Vector3(0,0,1),boneRot.z)
+		vert = bones[boneIndices[v]]["runningTransform"].xform(vert)
+	#	var vT = [vert.x,vert.y,vert.z,1]
+		#vT =  bones[boneIndices[v]]["runningTransform"]*vT
+		
+		#vert += bonePos
 
 		surf.add_vertex(vert)
 		
@@ -458,61 +548,48 @@ func boneHier2():
 				bone["children"].append(b2Index)
 	
 	#var rootBone = bones[1]
-	boneItt2(0)
-	
+	boneItt2(0,Transform.IDENTITY)
 
-
-
-func boneItt2(index):
+func boneItt2(index,runningTransform):
 	if index == 0:
 		var boneRot = bones[index]["rot"]
 		var bonePos = bones[index]["pos"]
 		var scaleR = bones[index]["scaleR"]
 		bones[index]["sumPos"] = bonePos
-	
+		
+		var localTransform = Transform.IDENTITY
+		localTransform = localTransform.translated(bonePos)
+		localTransform.basis = localTransform.basis.rotated(Vector3(1,0,0),boneRot.x)
+		localTransform.basis = localTransform.basis.rotated(Vector3(0,1,0),boneRot.y)
+		localTransform.basis = localTransform.basis.rotated(Vector3(0,0,1),boneRot.z)
+		runningTransform *= localTransform
+		
+		bones[index]["runningTransform"] = runningTransform
+		
 	for cIndex in bones[index]["children"]:
-		print(bones[cIndex]["name"])
+		var cTransform = runningTransform
+		
 		var pBoneRot = bones[index]["rot"]
+		var boneRot = bones[cIndex]["rot"]
 		var bonePos = bones[cIndex]["pos"]
 		
-		bonePos = bonePos.rotated(Vector3(1,0,0),pBoneRot.x)
-		bonePos = bonePos.rotated(Vector3(0,1,0),pBoneRot.y)
-		bonePos = bonePos.rotated(Vector3(0,0,1),pBoneRot.z)
 		
+		var localTransform = Transform.IDENTITY
+		localTransform = localTransform.translated(bonePos)
+		localTransform.basis = localTransform.basis.rotated(Vector3(1,0,0),boneRot.x)
+		localTransform.basis = localTransform.basis.rotated(Vector3(0,1,0),boneRot.y)
+		localTransform.basis = localTransform.basis.rotated(Vector3(0,0,1),boneRot.z)
+		cTransform *= localTransform
 		
+		bones[cIndex]["runningTransform"] = cTransform
 		bones[cIndex]["sumPos"] = bones[index]["sumPos"] + bonePos#bones[cIndex]["pos"]
 		#drawLine(bones[index]["sumPos"],bones[cIndex]["sumPos"])
-		boneItt2(cIndex)
+		boneItt2(cIndex,cTransform)
 
-func drawSphere(pos,nameStr = ""):
-	var meshNode = MeshInstance.new()
-	var mesh = SphereMesh.new()
-	
-	mesh.radius = 0.25
-	mesh.height = 0.5
-	meshNode.mesh = mesh
-	meshNode.name = nameStr
-	meshNode.translation = pos
-	add_child(meshNode)
-	return meshNode
 	
 	
-
-func drawLine(start,end):
-	if killSwitch == true:
-		return
-	var ig = ImmediateGeometry.new()
-	ig.begin(Mesh.PRIMITIVE_LINE_STRIP)
 	
-	ig.add_vertex(start)
-	ig.add_vertex(end)
-	var random_color = Color(randf(), randf(), randf())
-	var mat = SpatialMaterial.new()
-	mat.albedo_color = random_color
-	ig.material_override = mat
-	ig.end()
-	add_child(ig)
-	
-	var sphereNode : MeshInstance = drawSphere(end)
-	sphereNode.material_override = mat
-	
+func getVectorXZY(file):
+	var vec = file.get_Vector32()
+	#return Vector3(-vec.x,vec.z,vec.y)
+	return Vector3(vec.x,vec.y,vec.z)

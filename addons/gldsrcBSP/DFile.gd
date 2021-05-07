@@ -8,7 +8,7 @@ var pos = 0
 func loadFile(path):
 	var file = File.new()
 	if file.open(path,File.READ) != 0:
-	#	print("Error opening file:")
+		#print("Error opening file:",path)
 		return false
 	data = file.get_buffer(file.get_len())
 	
@@ -41,6 +41,7 @@ func get_16():
 	#var single_float = spb.get_16()
 	
 	#return single_float
+	var rety = (ret[1] << 8) + ret[0]
 	return (ret[1] << 8) + ret[0]
 	
 func get_32u():
@@ -83,12 +84,13 @@ func get_float32():
 	
 
 func get_buffer(size):
-	var ret = data.subarray(pos,pos+size)
+	var ret = data.subarray(pos,pos+(size-1))#not sure why using -1 here
 	pos+=size
 	return ret
 	
 func get_String(length):
 	var ret = data.subarray(pos,pos+(length-1)).get_string_from_ascii()
+	
 	pos+=length
 	return ret.to_upper()
 	

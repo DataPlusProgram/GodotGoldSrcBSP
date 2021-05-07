@@ -5,6 +5,7 @@ var pathName = []
 var pathPosArr = []
 var refArr = {}
 var triggers = []
+var scaleFactor
 var initialRot = 0
 var moveSound : AudioStreamPlayer3D = null
 
@@ -17,6 +18,8 @@ func _ready():
 	for i in targetNodesPath:
 		var gp= get_parent()
 		targetNodes.append(gp.get_node("Geometry").get_node(i))
+	
+	scaleFactor = get_meta("scaleFactor")
 	
 	if has_meta("pathName"):
 		var nameStr= get_meta("pathName")
@@ -70,7 +73,7 @@ func setOrigin(node,origin):
 func _physics_process(delta):
 	
 	
-	pathFollow.offset += delta*10
+	pathFollow.offset += delta*100*scaleFactor
 	
 	translation = pathFollow.translation
 	
@@ -84,8 +87,7 @@ func _physics_process(delta):
 		n.translation = pathFollow.translation
 		n.rotation = pathFollow.rotation - Vector3(0,initialRot,0)
 	
-		#var target =  pathFollow.rotation + Vector3(0,initialRot,0)
-		#n.rotation.y = lerp(n.rotation.y,target.y,0.1)
+
 
 	if moveSound != null:
 		if !moveSound.playing:
