@@ -237,7 +237,7 @@ func allWADparse(entityDict,wadDict):
 			wadDict["DECALS.WAD"] = parsedWad
 			
 	if entityDict.has("SKYNAME"):
-		print(entityDict["SKYNAME"])
+		#print(entityDict["SKYNAME"])
 		#get_parent().skyTexture = entityDict["SKYNAME"]
 		get_parent().skyTexture = wadDict["baseDirectory"]+ "gfx/env/" +entityDict["SKYNAME"].to_lower()
 	
@@ -358,7 +358,7 @@ func parseLight(dict):
 		light.visible = false
 	
 	if dict.has("TARGETNAME"):
-		light.add_to_group(dict["TARGETNAME"])
+		light.add_to_group(dict["TARGETNAME"],true)
 	
 	light.light_color = Color(r,g,b)
 	light.translation = pos
@@ -403,7 +403,7 @@ func parseLightSpot(dict):
 		light.visible = false
 	
 	if dict.has("TARGETNAME"):
-		light.add_to_group(dict["TARGETNAME"])
+		light.add_to_group(dict["TARGETNAME"],true)
 	var pitch = 0 
 	if dict.has("PITCH"):
 		int(dict["PITCH"])
@@ -518,7 +518,7 @@ func parseDoor(dict):
 	doorComponent.name = "func_door"
 	
 	if dict.has("TARGETNAME"):
-		doorComponent.add_to_group(dict["TARGETNAME"])
+		doorComponent.add_to_group(dict["TARGETNAME"],true)
 		doorComponent.set_meta("locked",1)
 	
 	if dict.has("TARGET"):
@@ -593,7 +593,7 @@ func parseBreakable(dict):
 		breakableNode.name = "func_breakable"
 		
 		if dict.has("TARGETNAME"):
-			breakableNode.add_to_group(dict["TARGETNAME"])
+			breakableNode.add_to_group(dict["TARGETNAME"],true)
 			
 		if dict.has("TARGET"):
 			breakableNode.set_meta("targetName",dict["TARGET"])
@@ -632,7 +632,7 @@ func parseButton(dict):
 			interactionAreaNode.add_child(audioPlayer)
 	
 	if dict.has("TARGETNAME"):
-		interactionAreaNode.add_to_group(dict["TARGETNAME"])
+		interactionAreaNode.add_to_group(dict["TARGETNAME"],true)
 	
 	interactionAreaNode.translation =(bushModelInfo["BBMin"] + 0.5*(bushModelInfo["BBMax"]-bushModelInfo["BBMin"]))
 	interactionAreaNode.name = "func_button"
@@ -720,7 +720,7 @@ func parseTriggerRelay(dict):
 	node.set_meta("targetName",targetName)
 	
 	node.set_script(load("res://addons/gldsrcBSP/funcScripts/trigger_relay.gd"))
-	node.add_to_group(targetName)
+	node.add_to_group(targetName,true)
 	get_parent().get_node("triggers").add_child(node)
 	
 	
@@ -872,7 +872,7 @@ func parseDoorRotating(dict):
 	doorComponent.set_meta("axis",axis)
 	
 	if dict.has("TARGETNAME"):
-		doorComponent.add_to_group(dict["TARGETNAME"])
+		doorComponent.add_to_group(dict["TARGETNAME"],true)
 	
 	var dimAbs = BBMax - BBMin
 	doorComponent.translate(BBMin + 0.5*dimAbs)
@@ -1204,7 +1204,7 @@ func parseTriggerCDAudio(dict):
 	player.set_script(load("res://addons/gldsrcBSP/funcScripts/cdaudio.gd"))
 	var id = String(randi())
 	get_parent().add_child(player)
-	player.add_to_group(id)
+	player.add_to_group(id,true)
 	var scriptRes = load("res://addons/gldsrcBSP/funcScripts/trigger.gd")
 	interactionBox.set_meta("target",id)
 	interactionBox.set_meta("trigger_once",true)
@@ -1466,7 +1466,7 @@ func parseMultiManager(dict):
 	
 	
 	if dict.has("TARGETNAME"):
-		node.add_to_group(dict["TARGETNAME"])
+		node.add_to_group(dict["TARGETNAME"],true)
 	
 	var scriptRes = load("res://addons/gldsrcBSP/funcScripts/multi_manager.gd")
 	node.name = dict["TARGETNAME"]
@@ -1533,7 +1533,7 @@ func parseTrain(dict):
 		
 		pathArr.append(a)
 		a = b
-		print(pathArr.size())
+		#print(pathArr.size())
 		if cornerPaths.size()>1:
 			if b == pathArr[0]:#the loop has been closed
 				break
@@ -1654,7 +1654,7 @@ func parseAmbientGeneric(dict):
 	#audioNode.unit_db = 0.5 * (volume/10.0)
 	audioNode.max_db = 1
 	if dict.has("TARGETNAME"):
-		audioNode.add_to_group(dict["TARGETNAME"])
+		audioNode.add_to_group(dict["TARGETNAME"],true)
 	
 	audioNode.translation = pos
 	audioNode.unit_size = 7 * (volume/10.0)
@@ -1691,7 +1691,7 @@ func parseAmbientGeneric(dict):
 			#print("not toggled")
 	
 	if dict.has("TARGETNAME"):
-		audioNode.add_to_group(dict["TARGETNAME"])
+		audioNode.add_to_group(dict["TARGETNAME"],true)
 
 	par.add_child(audioNode)
 
@@ -1713,7 +1713,7 @@ func parseModel(dict,modelName):
 	get_parent().add_child(mesh)
 	
 	if dict.has("TARGETNAME"):
-		mesh.add_to_group(dict["TARGETNAME"])
+		mesh.add_to_group(dict["TARGETNAME"],true)
 	
 	#breakpoint
 	

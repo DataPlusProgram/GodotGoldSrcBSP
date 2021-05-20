@@ -38,5 +38,4 @@ func recursiveOwn(node,newOwner):
 		if !i.has_meta("hidden"):
 			recursiveOwn(i,newOwner)
 	
-	print(newOwner)
 	node.owner = newOwner

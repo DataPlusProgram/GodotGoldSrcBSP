@@ -28,7 +28,7 @@ func addToAtlas(fmap,index = 1):
 	var dim = fmap.get_size()
 	var mapSize = image.get_size()
 	
-	#print(mapSize)
+	
 	if (curPos.x + dim.x) > maxW:
 		curPos.y+=curLineMaxH
 		curLineMaxH = 0
@@ -84,7 +84,7 @@ func initAtlas():
 	texture.create_from_image(image)
 	#texture.flags = 0
 	
-	image.save_png("atlas.png")
+	#image.save_png("atlas.png")
 	
 	
 	

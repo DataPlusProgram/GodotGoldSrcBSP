@@ -566,8 +566,7 @@ func findCommonverts(v1,v2):
 	var secondLineB = (v2[secondCommonB]-v2[secondCommonafter]).normalized()
 
 
-	#print(firstLineA.dot(firstLineB))
-	#print(secondLineA.dot(secondLineB))
+	
 	if(firstLineA.dot(firstLineB)==1 or firstLineA.dot(firstLineB)==0):
 		return commonIndexes[0]
 	elif(secondLineA.dot(secondLineB)==1):
@@ -575,7 +574,7 @@ func findCommonverts(v1,v2):
 	else:
 		return null
 
-#	print("----")
+
 	return commonIndexes
 
 
@@ -979,7 +978,7 @@ func textureLights():
 				indirectFake.translation += f.global_transform.origin +  normal*get_parent().scaleFactor*10
 				indirectFake.omni_range = 10
 				if !oneshotDict.has(textureName):
-					print(textureName)
+					
 					oneshotDict[textureName] = 1
 
 

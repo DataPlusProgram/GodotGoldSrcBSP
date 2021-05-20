@@ -52,7 +52,7 @@ func createImage(fileDict,isDecal = false,imageDictParam = null):#imageDictParam
 	#			count += 4
 	
 	#image.create_from_data(w,h,false,image.FORMAT_RGBA8,RGBA)
-	#print(128*128*4)
+
 	image.unlock()
 	var texture = ImageTexture.new()
 	

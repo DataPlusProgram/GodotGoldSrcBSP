@@ -46,7 +46,7 @@ export var optimize = true
 export var textureFilterSkyBox = true
 export var enableEntities = true
 export var disableSound = false
-export var textureLights = true
+export var textureLights = false
 
 var simpleCombine =  true
 var physicsPropsDontRotate = true
@@ -72,10 +72,8 @@ export(String,FILE) var path =  "Enter path to BSP here"
 export var scaleFactor = 0.05
 export var disableTextures = false
 export var textureFiltering = false
-#export var lightRangeMultiplier = 400.0
-#export var lightEnergyMultiplier = 75.0
 export var cacheMaterials = true
-export var collisions = true
+var collisions = true
 export var lights = false
 func _ready():
 	
@@ -593,7 +591,7 @@ func lightMapToImage():
 	var img : Image = Image.new()
 	
 	var size = (directory["LUMP_LIGHTING"]["length"]/4)
-	print(size)
+	#print(size)
 	var w = sqrt(size)
 	var h = w
 	
