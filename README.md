@@ -11,7 +11,11 @@ Copy the "addons" folder into the root directory of the Godot Project
 Go to Project->Project Settings->Plugins and set the plugins status to "Active"  
   
 ## Usage  
-  
+
+**Note that this isn't finished yet and is only here for testing purposes. Currently it only works by linkng the external GoldSrc game directory and as such can't yet be included into your Godot Project Directory**
+
+![](https://i.imgur.com/85MkXOi.png)
+
 Drag the BSP_Map.tscn file from the addons/gldsrcBSP folder into the scene tree.  
   
 Enter thet path to the bsp in "Path" field and Press "Create Map"  
