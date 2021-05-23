@@ -68,7 +68,7 @@ var LUMP_NANES = [
 			]
 
 
-export(String,FILE) var path =  "Enter path to BSP here"
+export(String,FILE,GLOBAL) var path =  "Enter path to BSP here"
 export var scaleFactor = 0.05
 export var disableTextures = false
 export var textureFiltering = false
