@@ -16,7 +16,6 @@ __meta__ = {
 "done": true
 }
 scaleFactor = 1.0
-textureFiltering = true
 
 [node name="levelBuilder" type="Spatial" parent="."]
 script = ExtResource( 3 )
