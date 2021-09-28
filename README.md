@@ -32,6 +32,23 @@ If you want a body to trigger/interact with the entities add it to the "hlTrigge
 
 You can import lightmaps from the BSP file but you will need to set your enviroment to "Clear Color" and up the ambient light.
 
+## Real-time lights and global illumination
+
+As an alternative or as a complement to lightmaps stored in the map file,
+you can use real-time lighting and global illumination. Real-time lighting can provide a better
+appearance and allows for lights to change during gameplay,
+but it's much slower to render compared to lightmaps.
+
+The resulting MeshInstances are configured to cast double-sided shadows.
+This allows real-time lights to cast mostly correct shadows, but peter-panning may still be present due to
+faces being hollow.
+Tweaking the lights' shadow bias values may help, but it's not always sufficient to hide shadow peter-panning.
+If tweaking the lights' shadow bias values doesn't suffice, try adding solid MeshInstances behind hollow walls
+manually to act as shadow casters.
+
+For global illumination, GIProbe can be used as the resulting MeshInstances are set to be used in baked light.
+However, BakedLightmap will not work correctly as UV2 isn't generated properly for the generated meshes.
+
 ## Media 
 
 ![](https://i.imgur.com/STAOPjS.jpg)  

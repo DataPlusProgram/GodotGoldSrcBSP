@@ -319,6 +319,14 @@ func createMeshFromFanArr(fans,faceIndex):
 	meshNode.name = "face_mesh_" + String(faceIndex)
 	meshNode.mesh = runningMesh
 	
+	# Fix real-time light shadows by ensuring that even "hollow" faces cast shadows.
+	# This is enabled even when lightmap generation is used, as lightmaps and real-time lights can coexist.
+	meshNode.cast_shadow = MeshInstance.SHADOW_CASTING_SETTING_DOUBLE_SIDED
+
+	# Allow baking global illumination with GIProbe.
+	# BakedLightmap can't be used correctly since there is no UV2 generated.
+	meshNode.use_in_baked_light = true
+
 	get_parent().faceMeshNodes[faceIndex] = meshNode
 	
 	meshNode.translation = center
