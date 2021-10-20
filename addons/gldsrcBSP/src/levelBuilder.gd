@@ -360,6 +360,8 @@ func createMat(texture,textureName,render = null):
 			
 		mat.flags_world_triplanar = true
 		mat.emission_enabled = true
+		# Allow metallic specular control to avoid issues with the environment being too reflective.
+		mat.metallic_specular = get_parent().materialsMetallicSpecular
 		#mat.emission_texture = 
 		#mat.uv1_triplanar = true
 		get_parent().saveToMaterialCache(matCacheName,mat)

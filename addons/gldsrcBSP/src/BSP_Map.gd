@@ -48,6 +48,9 @@ export var enableEntities = true
 export var disableSound = false
 export var textureLights = false
 
+# Defaults to 0.0 for a more "retro" appearance with fewer reflections from the environment.
+export(float, 0.0, 1.0, 0.01) var materialsMetallicSpecular = 0.0
+
 var simpleCombine =  true
 var physicsPropsDontRotate = true
 var playerSpawn = {"position":Vector3.ZERO,"rotation":Vector3.ZERO}
